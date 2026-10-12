@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { api, API_BASE_URL } from "../api";
 import type { Health } from "../types";
 
+/** Sidebar structure. `runScoped` links keep the selected run when followed. */
 const NAV: { section: string; runScoped?: boolean; items: { to: string; label: string; end?: boolean }[] }[] = [
   {
     section: "Overview",
@@ -41,6 +42,7 @@ const NAV: { section: string; runScoped?: boolean; items: { to: string; label: s
   },
 ];
 
+/** Polls /api/health every 15 seconds, so a stopped backend is noticed quickly. */
 function ApiStatus() {
   const [health, setHealth] = useState<Health | null>(null);
   const [down, setDown] = useState(false);
@@ -62,6 +64,7 @@ function ApiStatus() {
   );
 }
 
+/** Light/dark switch; public/theme-init.js restores the choice before first paint. */
 function ThemeToggle() {
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     return (localStorage.getItem("regradar-theme") as "light" | "dark") || "light";
@@ -86,6 +89,7 @@ function ThemeToggle() {
   );
 }
 
+/** App shell: sidebar navigation, mobile top bar and the routed page. */
 export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();

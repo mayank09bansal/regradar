@@ -49,11 +49,17 @@ CONTESTED: dict[str, str] = {
 
 
 class DemoLLM:
+    """Stand-in for an LLM client. Each ``task`` name maps to a ``_task_<name>`` method."""
     provider = "demo"
     model = "deterministic-demo-responder"
     is_live = False
 
     def complete_json(self, task: str, system: str, prompt: str, payload: dict[str, Any]) -> LLMResult:
+        """Dispatch to the task handler; prompts are ignored because payloads hold the facts.
+
+        Raises:
+            ValueError: For an unknown task. ``Agent.call_llm`` treats it as a failed call.
+        """
         handler = getattr(self, f"_task_{task}", None)
         if handler is None:
             raise ValueError(f"Demo responder has no handler for task {task!r}")
@@ -66,6 +72,7 @@ class DemoLLM:
 
     # ------------------------------------------------------------------ tasks
     def _task_synthesise_gaps(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Produce the deliberately imperfect first draft described in the module docstring."""
         controls = {c["id"]: c for c in payload["controls"]}
         obligations = {o["id"]: o for o in payload["obligations"]}
         gaps = []
@@ -87,9 +94,11 @@ class DemoLLM:
         return {"gaps": gaps, "notes": "Deterministic first-pass draft (demo responder)."}
 
     def _task_revise_gaps(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Answer each rejection using the shared feedback rules."""
         return {"revisions": [revise_from_feedback(r) for r in payload["rejected"]]}
 
     def _task_executive_summary(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Fill the summary template; also the fallback when a live summary fails."""
         s = payload["stats"]
         top = payload.get("top_items") or []
         lines = [

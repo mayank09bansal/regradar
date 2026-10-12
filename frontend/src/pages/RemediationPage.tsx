@@ -1,6 +1,7 @@
 import RunScope from "../components/RunScope";
 import { Card, EmptyState, SeverityBadge, Stat } from "../components/ui";
 
+/** The ranked plan, with the reasoning behind each risk score. */
 export default function RemediationPage() {
   return (
     <RunScope title="Remediation Plan" subtitle="Output Agent prioritisation: risk score = severity weight x urgency x exposure x classification factor.">

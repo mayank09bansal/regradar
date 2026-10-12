@@ -10,6 +10,28 @@ export const API_BASE_URL: string = (
   import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? "http://127.0.0.1:8000" : "")
 ).replace(/\/$/, "");
 
+// Kept for the browser tab only: the token authorises deleting data, so it should not outlive the session.
+const TOKEN_KEY = "regradar-api-token";
+
+/** Token saved for this tab, or an empty string. */
+export function getApiToken(): string {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Save the token for this tab; an empty value removes it. */
+export function setApiToken(token: string): void {
+  try {
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* storage blocked: the token simply is not remembered */
+  }
+}
+
 export class ApiError extends Error {
   status: number;
 
@@ -19,6 +41,7 @@ export class ApiError extends Error {
   }
 }
 
+/** Turn a FastAPI error `detail` (string or validation list) into one readable line. */
 function formatDetail(detail: unknown): string {
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
@@ -30,12 +53,23 @@ function formatDetail(detail: unknown): string {
   return JSON.stringify(detail);
 }
 
+/**
+ * Send a request and decode the response.
+ *
+ * Network failures and non-2xx responses become an ApiError with a message that is
+ * safe to show; a failed network call explains the likely cause.
+ */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
+  const token = getApiToken();
   try {
     res = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(init?.headers ?? {}),
+      },
     });
   } catch {
     throw new ApiError(
@@ -59,6 +93,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (type.includes("application/json") ? res.json() : res.text()) as Promise<T>;
 }
 
+/**
+ * Typed client for the RegRadar API. One method per endpoint, so pages never build
+ * URLs or handle transport errors themselves.
+ */
 export const api = {
   health: () => request<Health>("/api/health"),
   config: () => request<PublicConfig>("/api/config"),

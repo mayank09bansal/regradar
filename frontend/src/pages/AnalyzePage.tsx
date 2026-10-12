@@ -5,12 +5,14 @@ import { useAsync } from "../hooks";
 import type { AnalysisRequestBody } from "../types";
 import { Card, ErrorBox, PageHeader } from "../components/ui";
 
+/** Example circular with mandatory and recommended clauses, showing the expected format. */
 const SAMPLE = `7.1 Payment aggregators shall report every unauthorised transaction complaint to the regulator within 24 hours.
 
 7.2 Payment aggregators shall retain transaction logs for a minimum period of 5 years within India.
 
 7.3 Payment aggregators should review merchant onboarding controls quarterly.`;
 
+/** Form that configures and starts a demo or live analysis. */
 export default function AnalyzePage() {
   const config = useAsync(() => api.config(), "config");
   const navigate = useNavigate();

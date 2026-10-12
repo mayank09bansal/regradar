@@ -83,3 +83,79 @@ def test_local_openai_compatible_server_needs_no_key():
     client = OpenAICompatibleClient(api_key="", base_url="http://localhost:11434/v1", model="llama3",
                                     timeout=5, max_retries=0, temperature=0.1)
     assert client.api_key == ""
+
+
+TOKEN = "correct-horse-battery-staple"
+
+
+@pytest.fixture
+def secured_client(settings):
+    with TestClient(create_app(replace(settings, api_token=TOKEN))) as c:
+        yield c
+
+
+@pytest.mark.parametrize(("method", "path"), [
+    ("post", "/api/runs"),
+    ("post", "/api/demo/run"),
+    ("delete", "/api/runs/run-1"),
+    ("post", "/api/integrations/test"),
+])
+@pytest.mark.parametrize("headers", [{}, {"Authorization": "Bearer wrong"}, {"Authorization": f"Basic {TOKEN}"}])
+def test_write_endpoints_reject_missing_or_wrong_token(secured_client, method, path, headers):
+    r = secured_client.request(method, path, headers=headers, json={"mode": "demo"} if path == "/api/runs" else None)
+    assert r.status_code == 401
+    assert r.headers["www-authenticate"] == "Bearer"
+    assert TOKEN not in r.text
+
+
+def test_valid_token_allows_writes_and_reads_stay_open(secured_client):
+    auth = {"Authorization": f"Bearer {TOKEN}"}
+    created = secured_client.post("/api/demo/run", headers=auth)
+    assert created.status_code == 201
+    assert secured_client.get(f"/api/runs/{created.json()['id']}").status_code == 200
+    assert secured_client.delete(f"/api/runs/{created.json()['id']}", headers=auth).status_code == 204
+
+
+def test_token_is_reported_as_required_but_never_exposed(secured_client):
+    r = secured_client.get("/api/config")
+    assert r.json()["write_auth_required"] is True and TOKEN not in r.text
+
+
+def test_writes_stay_open_when_no_token_is_configured(settings):
+    with TestClient(create_app(settings)) as c:
+        assert c.get("/api/config").json()["write_auth_required"] is False
+        assert c.post("/api/demo/run").status_code == 201
+
+
+def test_token_is_excluded_from_settings_repr(monkeypatch):
+    monkeypatch.setenv("REGRADAR_API_TOKEN", TOKEN)
+    s = build_settings()
+    assert s.api_token == TOKEN and TOKEN not in repr(s)
+
+
+def test_security_headers_on_api_and_csp_exempts_swagger(settings):
+    with TestClient(create_app(settings)) as c:
+        api = c.get("/api/health")
+        assert api.headers["x-content-type-options"] == "nosniff"
+        assert api.headers["x-frame-options"] == "DENY"
+        assert "script-src 'self'" in api.headers["content-security-policy"]
+        docs = c.get("/docs")
+        assert docs.status_code == 200 and docs.headers["x-content-type-options"] == "nosniff"
+        assert "content-security-policy" not in docs.headers
+
+
+def test_browser_can_send_the_token_and_patch_cross_origin(settings):
+    with TestClient(create_app(settings)) as c:
+        r = c.options("/api/runs/x/remediation/GAP-001", headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "PATCH",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        })
+    assert r.status_code == 200
+    assert "PATCH" in r.headers["access-control-allow-methods"]
+    assert "authorization" in r.headers["access-control-allow-headers"].lower()
+
+
+def test_dashboard_entry_has_no_inline_script():
+    html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
+    assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html)

@@ -17,6 +17,8 @@ from backend.retrieval.knowledge import known_issues
 from backend.retrieval.text import normalise_ws
 from backend.schemas import SEVERITY_ORDER, GapProposal, ValidationDecision, ValidationIssue
 
+# Recorded on every decision as ``checks_run`` so a reader can see what each verdict covered.
+# Keep in step with check_gap and the "9 Validation Checks" table in README.md.
 CHECKS = (
     "obligation_exists",
     "required_detail",
@@ -29,6 +31,7 @@ CHECKS = (
     "severity_calibration",
 )
 
+# Advisory only: LLM notes are displayed beside a decision and never change accept or reject.
 SYSTEM_CRITIQUE = (
     "You are an independent compliance quality reviewer. For each proposed gap, say whether the "
     "recommended action is specific and actionable. Be concise."
@@ -36,10 +39,16 @@ SYSTEM_CRITIQUE = (
 
 
 def _norm(text: str) -> str:
+    """Normalise text so quote matching ignores spacing, case and surrounding punctuation."""
     return normalise_ws(text).lower().strip(" .\"'")
 
 
 class NoveltyValidator(Agent):
+    """Agent 5: rule-based quality gate for gap proposals.
+
+    Decisions come from deterministic checks, which keeps them reproducible and
+    prevents a model from approving its own output.
+    """
     name = "novelty_validator"
     display_name = "Novelty Validator"
     role = "Independently validates gaps (grounding, citation, coverage, novelty, duplication, modality, severity) and returns structured feedback."
@@ -51,6 +60,21 @@ class NoveltyValidator(Agent):
         coverage: dict[str, dict[str, Any]],
         claimed_obligations: dict[str, str],
     ) -> list[ValidationIssue]:
+        """Run all rule checks against one gap.
+
+        An unknown obligation returns immediately because the remaining checks
+        compare against it. All other checks run in full, so one round reports
+        every problem and the synthesiser can fix them together.
+
+        Args:
+            gap: Proposal under review.
+            obligations: Source obligations by id.
+            coverage: Coverage items by obligation id.
+            claimed_obligations: Obligation id to the gap id that owns it (duplicate check).
+
+        Returns:
+            Issues found; an empty list means the gap passed.
+        """
         issues: list[ValidationIssue] = []
         ob = obligations.get(gap.obligation_id)
         if ob is None:
@@ -115,6 +139,14 @@ class NoveltyValidator(Agent):
         return issues
 
     def _llm_critique(self, gaps: list[GapProposal], buf: MessageBuffer, round_no: int) -> dict[str, str]:
+        """Collect optional actionability notes from a live LLM.
+
+        Skipped for the demo responder. A failure is logged to the trace and
+        returns no notes, because the rule checks already decide the outcome.
+
+        Returns:
+            Gap id to note, capped at 400 characters each.
+        """
         if not self.ctx.llm.is_live or not gaps:
             return {}
         items = [{"gap_id": g.id, "title": g.title, "recommended_action": g.recommended_action} for g in gaps]
@@ -133,6 +165,15 @@ class NoveltyValidator(Agent):
         return notes
 
     def run(self, state, buf: MessageBuffer) -> dict[str, Any]:
+        """Validate each proposed or revised gap and publish the round's outcome.
+
+        Accepted gaps stay accepted and are not checked again. Rejections are
+        stored in ``pending_feedback``, which is how the synthesiser receives them;
+        ``route_after_validation`` then decides between revising and escalating.
+
+        Returns:
+            State update with gaps, cumulative decisions, feedback and the round number.
+        """
         round_no = state.get("validation_round", 0) + 1
         revision = state.get("revision_count", 0)
         obligations = {o["id"]: o for o in state.get("obligations", [])}

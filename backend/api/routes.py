@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import logging
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -32,6 +33,23 @@ def get_db(request: Request) -> RunStore:
 
 def get_settings_dep(request: Request) -> Settings:
     return request.app.state.settings
+
+
+def require_write_access(request: Request, settings: Settings = Depends(get_settings_dep)) -> None:
+    """Protect write endpoints when REGRADAR_API_TOKEN is set; reads stay open for the dashboard."""
+    if not settings.api_token:
+        return
+    scheme, _, supplied = request.headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(supplied.strip().encode(), settings.api_token.encode()):
+        raise HTTPException(
+            status_code=401,
+            detail="This action needs the API token. Send 'Authorization: Bearer <token>' "
+                   "or, in the dashboard, enter it under Settings > Write access.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+WRITE_ACCESS = [Depends(require_write_access)]
 
 
 def to_detail(row: dict[str, Any]) -> dict[str, Any]:
@@ -116,7 +134,7 @@ def _execute(body: AnalysisRequest, settings: Settings, db: RunStore) -> dict[st
     return to_detail(row)
 
 
-@router.post("/runs", status_code=201)
+@router.post("/runs", status_code=201, dependencies=WRITE_ACCESS)
 def create_run(
     body: AnalysisRequest, db: RunStore = Depends(get_db), settings: Settings = Depends(get_settings_dep)
 ) -> dict[str, Any]:
@@ -124,7 +142,7 @@ def create_run(
     return _execute(body, settings, db)
 
 
-@router.post("/demo/run", status_code=201)
+@router.post("/demo/run", status_code=201, dependencies=WRITE_ACCESS)
 def run_demo(
     max_revisions: int | None = Query(default=None, ge=0, le=5),
     notify: bool = False,
@@ -153,7 +171,7 @@ def get_run(run_id: str, db: RunStore = Depends(get_db)) -> dict[str, Any]:
     return to_detail(_require_run(db, run_id))
 
 
-@router.delete("/runs/{run_id}", status_code=204)
+@router.delete("/runs/{run_id}", status_code=204, dependencies=WRITE_ACCESS)
 def delete_run(run_id: str, db: RunStore = Depends(get_db)) -> None:
     if not db.delete_run(run_id):
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
@@ -223,7 +241,7 @@ def n8n_workflow() -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"n8n workflow export not found: {exc.filename}") from exc
 
 
-@router.post("/integrations/test")
+@router.post("/integrations/test", dependencies=WRITE_ACCESS)
 def test_integrations(settings: Settings = Depends(get_settings_dep)) -> dict[str, Any]:
     if not (settings.slack_webhook_url or settings.n8n_webhook_url):
         raise HTTPException(status_code=400, detail="Neither SLACK_WEBHOOK_URL nor N8N_WEBHOOK_URL is set in .env")

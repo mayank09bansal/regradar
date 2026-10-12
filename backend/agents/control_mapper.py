@@ -9,13 +9,22 @@ from backend.retrieval.knowledge import load_control_library
 from backend.retrieval.text import TfidfIndex, keyword_overlap
 from backend.schemas import ControlCandidate, CoverageItem, Obligation
 
+# Score bands for the coverage matrix: >= COVERED is covered (if no parameter shortfall),
+# >= PARTIAL is partial, anything lower is a gap. CoveragePage.tsx quotes these values.
 COVERED_THRESHOLD = 0.42
 PARTIAL_THRESHOLD = 0.20
+# Cosine similarity captures overall wording; keyword overlap rewards curated control terms.
+# The weights sum to 1, so a blended score stays between 0 and 1.
 COSINE_WEIGHT = 0.65
 KEYWORD_WEIGHT = 0.35
 
 
 def control_text(control: dict[str, Any]) -> str:
+    """Flatten a control into the text used for similarity scoring.
+
+        Keywords are included so curated terms count towards TF-IDF as well as
+        towards the separate keyword-overlap score.
+    """
     return " ".join([control["title"], control["description"], " ".join(control.get("keywords", []))])
 
 
@@ -40,11 +49,26 @@ def find_shortfalls(obligation: Obligation, control: dict[str, Any]) -> list[str
 
 
 class ControlMapper(Agent):
+    """Agent 3: builds the coverage matrix that every later agent relies on.
+
+    The result is deterministic and explainable: each status can be traced to a
+    numeric score, a threshold and any parameter shortfall.
+    """
     name = "control_mapper"
     display_name = "Control Mapper"
     role = "Scores every obligation against the control library (TF-IDF + keyword overlap) and checks quantitative shortfalls."
 
     def run(self, state, buf: MessageBuffer) -> dict[str, Any]:
+        """Score every obligation against every control and classify its coverage.
+
+        The index is fitted on controls and obligations together so that IDF
+        reflects this run's vocabulary. Only the best-scoring control is checked
+        for shortfalls, and only when it is at least related (>= PARTIAL_THRESHOLD):
+        a numeric mismatch with an unrelated control would be meaningless.
+
+        Returns:
+            State update containing ``coverage``, one item per obligation.
+        """
         controls = load_control_library()["controls"]
         obligations = [Obligation.model_validate(o) for o in state.get("obligations", [])]
         index = TfidfIndex([control_text(c) for c in controls] + [o.text for o in obligations])

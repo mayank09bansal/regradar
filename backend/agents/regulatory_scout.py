@@ -10,15 +10,22 @@ from backend.retrieval.sources import SourceError, demo_documents, fetch_feed, u
 from backend.retrieval.text import tokenize
 from backend.schemas import AnalysisRequest, RegulatoryDocument
 
+# Upper limit on RSS items per run: each document adds LLM calls, cost and latency.
 MAX_LIVE_DOCS = 6
 
 
 class RegulatoryScout(Agent):
+    """Agent 1: decides which documents enter the run.
+
+    Source failures are recorded as errors, never replaced with synthetic data,
+    so a live run cannot quietly report on content it did not retrieve.
+    """
     name = "regulatory_scout"
     display_name = "Regulatory Scout"
     role = "Retrieves regulatory documents (synthetic dataset, pasted circulars, RBI/SEBI RSS) and ranks relevance."
 
     def _interest_terms(self) -> set[str]:
+        """Build the vocabulary for relevance: company themes plus control keywords."""
         terms: set[str] = set()
         for theme in load_demo_dataset()["organisation_profile"]["themes_of_interest"]:
             terms.update(tokenize(theme))
@@ -28,12 +35,21 @@ class RegulatoryScout(Agent):
         return terms
 
     def _relevance(self, doc: RegulatoryDocument, terms: set[str]) -> float:
+        """Score a document as the share of its tokens in ``terms`` (0 to 1, 3 decimals)."""
         toks = tokenize(doc.title + " " + " ".join(c.text for c in doc.clauses))
         if not toks:
             return 0.0
         return round(sum(1 for t in toks if t in terms) / len(toks), 3)
 
     def run(self, state, buf: MessageBuffer) -> dict[str, Any]:
+        """Gather documents for the requested mode and hand them to extraction.
+
+        Demo mode reads the synthetic dataset. Live mode combines pasted documents
+        with RSS items, which are ranked by relevance and capped at ``MAX_LIVE_DOCS``.
+
+        Returns:
+            State update with ``documents`` and ``source_errors``.
+        """
         request = AnalysisRequest.model_validate(state["request"])
         settings = self.ctx.settings
         docs: list[RegulatoryDocument] = []

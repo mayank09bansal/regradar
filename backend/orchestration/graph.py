@@ -26,6 +26,7 @@ from backend.orchestration.state import RegRadarState, RunContext
 
 
 def route_after_scout(state: RegRadarState) -> str:
+    """Skip straight to the report when no documents were retrieved."""
     return "extract" if state.get("documents") else "no_documents"
 
 
@@ -40,6 +41,12 @@ def route_after_validation(state: RegRadarState) -> str:
 
 
 def make_escalation_node(ctx: RunContext):
+    """Create the node that hands unresolved gaps to a human.
+
+    Runs only when gaps are still rejected at the revision limit. Each becomes
+    "escalated" and is reported with the validator's last objection and the
+    synthesiser's position, so a reviewer sees both sides of the disagreement.
+    """
     def escalation(state: RegRadarState) -> dict[str, Any]:
         buf = MessageBuffer(state, ctx, "orchestrator")
         gaps = [dict(g) for g in state.get("gaps", [])]
@@ -65,6 +72,10 @@ def make_escalation_node(ctx: RunContext):
 
 
 def build_graph(ctx: RunContext):
+    """Compile the pipeline, with ``ctx`` bound into each node.
+
+    A fresh graph per run keeps per-run objects out of shared module state.
+    """
     graph = StateGraph(RegRadarState)
     graph.add_node("regulatory_scout", RegulatoryScout(ctx))
     graph.add_node("obligation_extractor", ObligationExtractor(ctx))
@@ -91,6 +102,7 @@ def build_graph(ctx: RunContext):
     return graph.compile()
 
 
+# Static description for /api/graph and the Architecture page. Keep in step with build_graph.
 GRAPH_SPEC = {
     "nodes": [
         {"id": "regulatory_scout", "label": "Regulatory Scout", "kind": "agent"},

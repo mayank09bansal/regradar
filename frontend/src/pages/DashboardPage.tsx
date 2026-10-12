@@ -5,6 +5,7 @@ import { useAsync } from "../hooks";
 import { formatDateTime, shortId } from "../lib";
 import { Card, EmptyState, ErrorBox, Loading, ModeBadge, PageHeader, Stat, StatusPill } from "../components/ui";
 
+/** Agent name and verb for the pipeline strip, in graph order. */
 const PIPELINE = [
   ["Regulatory Scout", "retrieve"],
   ["Obligation Extractor", "extract"],
@@ -14,6 +15,7 @@ const PIPELINE = [
   ["Output Agent", "report"],
 ];
 
+/** Landing page: run the demo, see the latest results and recent history. */
 export default function DashboardPage() {
   const latest = useAsync(() => api.latestRun().catch(() => null), "dash-latest");
   const runs = useAsync(() => api.runs(6), "dash-runs");

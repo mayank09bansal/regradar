@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "./api";
 import type { RunDetail } from "./types";
 
+/** State exposed by useAsync. `data` keeps its last value during a reload. */
 export interface AsyncState<T> {
   data: T | null;
   error: string | null;
@@ -33,6 +34,7 @@ export function useAsync<T>(loader: () => Promise<T>, key: string): AsyncState<T
   return { data, error, loading, reload };
 }
 
+/** The run a page should display, with its load state and controls. */
 export interface SelectedRun {
   run: RunDetail | null;
   runId: string | null;

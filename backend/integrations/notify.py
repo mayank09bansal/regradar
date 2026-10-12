@@ -18,6 +18,11 @@ log = logging.getLogger("regradar.notify")
 
 
 def _post_json(url: str, body: dict[str, Any], timeout: int = 10) -> tuple[bool, str]:
+    """POST JSON to a webhook.
+
+    Returns:
+        A success flag and a detail string; network errors are returned, not raised.
+    """
     req = urllib.request.Request(
         url, data=json.dumps(body, default=str).encode("utf-8"),
         headers={"content-type": "application/json"}, method="POST",
@@ -30,6 +35,16 @@ def _post_json(url: str, body: dict[str, Any], timeout: int = 10) -> tuple[bool,
 
 
 def notify_run_completed(settings: Settings, run_id: str, stats: dict[str, Any]) -> dict[str, str]:
+    """Announce a finished run on each configured channel.
+
+    Args:
+        settings: Supplies the webhook URLs. Unset channels are skipped.
+        run_id: Finished run.
+        stats: Run statistics quoted in the message.
+
+    Returns:
+        Channel name to an "ok: ..." or "failed: ..." outcome.
+    """
     results: dict[str, str] = {}
     text = (
         f"RegRadar run {run_id} finished: {stats.get('accepted_gaps', 0)} accepted gap(s), "

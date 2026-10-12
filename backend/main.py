@@ -24,6 +24,18 @@ from backend.db import open_database
 
 log = logging.getLogger("regradar")
 
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "same-origin",
+}
+# Inline styles cover the style attributes React writes for chart widths.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+    "connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+)
+CSP_EXEMPT_PREFIXES = ("/docs", "/redoc")  # Swagger UI and ReDoc load their assets from a CDN
+
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
@@ -40,6 +52,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         if not settings.storage_persistent:
             log.warning("Run storage is temporary: set DATABASE_URL to a PostgreSQL database to keep run history.")
+        if settings.app_env == "production" and not settings.api_token:
+            log.warning("REGRADAR_API_TOKEN is not set: anyone who can reach this API can start runs and delete data.")
         yield
 
     app = FastAPI(
@@ -52,10 +66,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
         allow_credentials=False,
-        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
     app.include_router(router)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
+        if not request.url.path.startswith(CSP_EXEMPT_PREFIXES):
+            response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+        return response
 
     @app.exception_handler(Exception)
     async def unhandled(_: Request, exc: Exception) -> JSONResponse:  # pragma: no cover - defensive

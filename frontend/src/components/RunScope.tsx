@@ -6,6 +6,7 @@ import { formatDateTime, shortId } from "../lib";
 import type { RunDetail } from "../types";
 import { EmptyState, ErrorBox, Loading, ModeBadge, PageHeader, StatusPill } from "./ui";
 
+/** Tabs shown for a run; an empty path is the overview. */
 const SUBPAGES = [
   { path: "", label: "Overview" },
   { path: "trace", label: "Trace" },
@@ -16,6 +17,7 @@ const SUBPAGES = [
   { path: "report", label: "Report" },
 ];
 
+/** Switch run while staying on the same page, for /runs/:id and ?run= URLs alike. */
 function RunPicker({ current }: { current: string }) {
   const runs = useAsync(() => api.runs(30), "runs-picker");
   const navigate = useNavigate();
