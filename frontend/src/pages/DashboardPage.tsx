@@ -1,28 +1,136 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
-import { useAsync } from "../hooks";
-import { formatDateTime, shortId } from "../lib";
-import { Card, EmptyState, ErrorBox, Loading, ModeBadge, PageHeader, Stat, StatusPill } from "../components/ui";
+import { Card, EmptyState, ErrorBox, Loading, ModeBadge, PageHeader, StatusPill } from "../components/ui";
+import AgentsView from "../dashboard/AgentsView";
+import { TipLayer } from "../dashboard/charts";
+import "../dashboard/dashboard.css";
+import HistoryView from "../dashboard/HistoryView";
+import { ALL_REGULATORS, PIPELINE_AGENTS } from "../dashboard/metrics";
+import OverviewView from "../dashboard/OverviewView";
+import RiskView from "../dashboard/RiskView";
+import { DASHBOARD_VIEWS, NO_BASELINE, useDashboard, type DashboardState } from "../dashboard/useDashboard";
+import { agentLabel, formatDateTime, shortId } from "../lib";
 
-/** Agent name and verb for the pipeline strip, in graph order. */
-const PIPELINE = [
-  ["Regulatory Scout", "retrieve"],
-  ["Obligation Extractor", "extract"],
-  ["Control Mapper", "map"],
-  ["Gap Synthesiser", "propose"],
-  ["Novelty Validator", "validate"],
-  ["Output Agent", "report"],
-];
+/** Scope controls: one row above everything they narrow. */
+function FilterBar({ dash }: { dash: DashboardState }) {
+  const { run, runs, runId, baselineId, baselineOff, regulator, regulators } = dash;
+  const options = runs.data ?? [];
+  const scoped = dash.view === "overview" || dash.view === "risk";
+  const comparable = options.filter((r) => r.id !== runId && r.status === "completed");
+  return (
+    <div className="dash-filters">
+      <label className="run-picker">
+        <span>Run</span>
+        <select value={runId ?? ""} onChange={(e) => dash.selectRun(e.target.value)} disabled={!options.length}>
+          {!options.some((r) => r.id === runId) && runId && <option value={runId}>{shortId(runId)}</option>}
+          {options.map((r) => <option key={r.id} value={r.id}>{shortId(r.id)} - {r.mode} - {r.status}</option>)}
+        </select>
+      </label>
+      <label className="run-picker">
+        <span>Compare with</span>
+        <select value={baselineOff ? NO_BASELINE : baselineId ?? NO_BASELINE} onChange={(e) => dash.setBaseline(e.target.value)} disabled={!options.length}>
+          <option value={NO_BASELINE}>No comparison</option>
+          {baselineId && !comparable.some((r) => r.id === baselineId) && <option value={baselineId}>{shortId(baselineId)}</option>}
+          {comparable.map((r) => <option key={r.id} value={r.id}>{shortId(r.id)} - {r.mode}</option>)}
+        </select>
+      </label>
+      {scoped && regulators.length > 1 && (
+        <div className="seg-control" role="tablist" aria-label="Regulator">
+          {[ALL_REGULATORS, ...regulators].map((r) => (
+            <button key={r} type="button" role="tab" aria-selected={regulator === r} className={`dash-seg-plain ${regulator === r ? "active" : ""}`} onClick={() => dash.setRegulator(r)}>
+              {r === ALL_REGULATORS ? "All regulators" : r}
+            </button>
+          ))}
+        </div>
+      )}
+      {run && (
+        <div className="row gap-s push">
+          <ModeBadge mode={run.mode} />
+          <StatusPill status={run.status} />
+          <span className="small muted">{formatDateTime(run.created_at)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
-/** Landing page: run the demo, see the latest results and recent history. */
+function ViewTabs({ dash }: { dash: DashboardState }) {
+  return (
+    <div className="dash-tabs" role="tablist" aria-label="Dashboard views">
+      {DASHBOARD_VIEWS.map((v) => (
+        <button key={v.id} type="button" role="tab" aria-selected={dash.view === v.id} className={dash.view === v.id ? "active" : ""} onClick={() => dash.setView(v.id)}>
+          {v.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** First-run state: what will happen, using the same pipeline strip the Agents view measures. */
+function FirstRun() {
+  return (
+    <>
+      <div className="pipeline" aria-label="Agent pipeline">
+        {PIPELINE_AGENTS.map((agent, i) => (
+          <div key={agent.id} className={`pipe-step ${agent.loop ? "loop" : ""}`}>
+            <span className="pipe-num">{i + 1}</span>
+            <span className="pipe-name">{agentLabel(agent.id)}</span>
+            <span className="pipe-verb">{agent.verb}</span>
+          </div>
+        ))}
+        <div className="pipe-loop-note">Synthesiser and Validator loop until gaps pass validation or the revision limit escalates them.</div>
+      </div>
+      <EmptyState title="No runs yet">
+        <p>Click <strong>Run deterministic demo</strong> to execute the full graph on the synthetic dataset. No API key is required.</p>
+      </EmptyState>
+    </>
+  );
+}
+
+/** The selected dashboard view; earlier data stays up, dimmed, during a refresh. */
+function ActiveView({ dash }: { dash: DashboardState }) {
+  const { current, run, view } = dash;
+  if (!current || !run) return null;
+  const refreshing = dash.runLoading || dash.runs.loading;
+  return (
+    <div className={`dash-body ${refreshing ? "refreshing" : ""}`} role="tabpanel" aria-busy={refreshing}>
+      {view === "overview" && (
+        <OverviewView
+          view={current}
+          baseline={dash.baseline}
+          baselineOff={dash.baselineOff}
+          baselineLoading={dash.baselineId !== null && dash.baseline === null && !dash.baselineError}
+          baselineError={dash.baselineError}
+          runs={dash.runs.data ?? []}
+          now={dash.now}
+        />
+      )}
+      {/* keyed so queue filters don't outlive the run and regulator they were set for */}
+      {view === "risk" && <RiskView key={`${run.id}-${dash.regulator}`} view={current} now={dash.now} />}
+      {view === "agents" && (
+        <AgentsView run={run} messages={dash.messages} traceError={dash.traceError} health={dash.health.data} config={dash.config.data} />
+      )}
+      {view === "history" && (
+        <HistoryView
+          runs={dash.runs.data ?? []}
+          currentId={run.id}
+          baselineId={dash.baselineId}
+          onPick={dash.selectRun}
+          onCompare={dash.setBaseline}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Landing page: run the demo, then read posture, risk, agent behaviour and history for any run. */
 export default function DashboardPage() {
-  const latest = useAsync(() => api.latestRun().catch(() => null), "dash-latest");
-  const runs = useAsync(() => api.runs(6), "dash-runs");
-  const health = useAsync(() => api.health(), "dash-health");
+  const dash = useDashboard();
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const health = dash.health.data;
 
   async function runDemo() {
     setRunning(true);
@@ -37,95 +145,47 @@ export default function DashboardPage() {
     }
   }
 
-  const run = latest.data;
-  const s = run?.stats;
-
   return (
-    <>
+    <TipLayer>
       <PageHeader
         title="Dashboard"
         subtitle="Six LangGraph agents turn regulatory change into validated, prioritised compliance gaps."
         actions={
-          <button className="btn btn-primary" onClick={runDemo} disabled={running}>
-            {running ? "Running demo graph..." : "Run deterministic demo"}
-          </button>
+          <>
+            <button className="btn btn-secondary" onClick={dash.refresh} disabled={dash.runLoading}>Refresh</button>
+            <button className="btn btn-primary" onClick={runDemo} disabled={running}>
+              {running ? "Running demo graph..." : "Run deterministic demo"}
+            </button>
+          </>
         }
       />
       {runError && <ErrorBox error={runError} />}
-      {health.data && !health.data.storage_persistent && (
+      {health && !health.storage_persistent && (
         <div className="notice warn">
-          <strong>Temporary run storage.</strong> Runs are kept in {health.data.storage} and may disappear when the
-          {health.data.deployment === "vercel" ? " serverless instance restarts" : " server stops"}. Connect a PostgreSQL
+          <strong>Temporary run storage.</strong> Runs are kept in {health.storage} and may disappear when the
+          {health.deployment === "vercel" ? " serverless instance restarts" : " server stops"}. Connect a PostgreSQL
           database (DATABASE_URL) to keep run history and traces.
         </div>
       )}
 
-      <div className="pipeline" aria-label="Agent pipeline">
-        {PIPELINE.map(([name, verb], i) => (
-          <div key={name} className={`pipe-step ${i === 3 || i === 4 ? "loop" : ""}`}>
-            <span className="pipe-num">{i + 1}</span>
-            <span className="pipe-name">{name}</span>
-            <span className="pipe-verb">{verb}</span>
-          </div>
-        ))}
-        <div className="pipe-loop-note">Synthesiser and Validator loop until gaps pass validation or the revision limit escalates them.</div>
-      </div>
-
-      {latest.loading ? <Loading /> : latest.error ? <ErrorBox error={latest.error} onRetry={latest.reload} /> : !run ? (
-        <EmptyState title="No runs yet">
-          <p>Click <strong>Run deterministic demo</strong> to execute the full graph on the synthetic dataset. No API key is required.</p>
-        </EmptyState>
-      ) : (
+      {dash.runError ? (
         <>
-          <Card
-            title={<>Latest run <span className="mono small">{shortId(run.id)}</span></>}
-            actions={<div className="row gap-s"><ModeBadge mode={run.mode} /><StatusPill status={run.status} /></div>}
-          >
-            <div className="stats-grid">
-              <Stat label="Obligations" value={s?.obligations ?? "-"} hint={`${s?.documents ?? 0} documents`} />
-              <Stat label="Fully covered" value={`${s?.coverage_pct ?? 0}%`} hint={`${s?.covered ?? 0} covered / ${s?.partial ?? 0} partial / ${s?.gap ?? 0} gap`} tone="info" />
-              <Stat label="Accepted gaps" value={s?.accepted_gaps ?? "-"} tone="good" hint={`${s?.proposed_gaps ?? 0} proposed`} />
-              <Stat label="Rejections" value={s?.rejection_events ?? "-"} tone="warn" hint={`${s?.validation_rounds ?? 0} validation rounds`} />
-              <Stat label="Revision cycles" value={s?.revision_cycles ?? "-"} tone="warn" hint={s?.feedback_loop_triggered ? "feedback loop triggered" : "no rejections"} />
-              <Stat label="Escalated" value={s?.escalated_gaps ?? "-"} tone="bad" hint="needs human review" />
-            </div>
-            <div className="row gap-s wrap mt">
-              <Link className="btn btn-secondary" to={`/runs/${run.id}/feedback-loop`}>View feedback loop</Link>
-              <Link className="btn btn-secondary" to={`/runs/${run.id}/trace`}>Agent trace</Link>
-              <Link className="btn btn-secondary" to={`/runs/${run.id}/remediation`}>Remediation plan</Link>
-              <Link className="btn btn-secondary" to={`/runs/${run.id}/report`}>Final report</Link>
-            </div>
-          </Card>
-          {run.report && (
-            <Card title="Executive summary">
-              <p>{run.report.executive_summary}</p>
-              <p className="muted small">{run.report.reasoning_note}</p>
-            </Card>
+          <ErrorBox error={dash.runError} onRetry={dash.refresh} />
+          {dash.runId && <p><button type="button" className="link-btn" onClick={dash.clearRun}>Show the latest run instead</button></p>}
+        </>
+      ) : dash.noRuns ? <FirstRun /> : !dash.run ? <Loading /> : (
+        <>
+          <FilterBar dash={dash} />
+          <ViewTabs dash={dash} />
+          {dash.runs.error && (
+            <Card><p className="bad-text small">Run history could not be loaded, so trends and comparison are unavailable: {dash.runs.error}</p></Card>
           )}
+          <ActiveView dash={dash} />
+          <p className="small muted dash-foot">
+            Figures are recomputed from this run's stored results. <Link to={`/runs/${dash.run.id}`}>Open run overview</Link>
+          </p>
         </>
       )}
-
-      <Card title="Recent runs" actions={<Link to="/runs">All runs</Link>}>
-        {runs.loading ? <Loading /> : runs.error ? <ErrorBox error={runs.error} /> : runs.data && runs.data.length > 0 ? (
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Run</th><th>Started</th><th>Mode</th><th>Status</th><th>Accepted</th><th>Escalated</th></tr></thead>
-              <tbody>
-                {runs.data.map((r) => (
-                  <tr key={r.id}>
-                    <td><Link className="mono" to={`/runs/${r.id}`}>{shortId(r.id)}</Link></td>
-                    <td>{formatDateTime(r.created_at)}</td>
-                    <td>{r.mode}</td>
-                    <td><StatusPill status={r.status} /></td>
-                    <td>{r.stats.accepted_gaps ?? "-"}</td>
-                    <td>{r.stats.escalated_gaps ?? "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <p className="muted">No runs recorded.</p>}
-      </Card>
-    </>
+    </TipLayer>
   );
 }
