@@ -132,3 +132,5 @@ def test_cors_preflight_allows_frontend_origin(client):
 
 def test_integration_test_requires_configuration(client):
     assert client.post("/api/integrations/test").status_code == 400
+
+
