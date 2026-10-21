@@ -1,0 +1,14 @@
+[
+  {
+    "title": "Incident notification timeline shortened",
+    "regulator": "Example Authority",
+    "severity": "critical",
+    "action": "Confirm the incident response procedure can meet the new deadline."
+  },
+  {
+    "title": "Annual access review guidance updated",
+    "regulator": "Example Authority",
+    "severity": "medium",
+    "action": "Review the access-certification checklist before the next review cycle."
+  }
+]

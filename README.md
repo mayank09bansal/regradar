@@ -1,125 +1,196 @@
-# RegRadar - multi-agent regulatory change radar
+# RegRadar
 
-RegRadar turns new regulatory circulars into **validated, prioritised compliance gaps**. Six LangGraph agents retrieve regulations, extract obligations, map them to internal controls, propose gaps, independently validate them in a **feedback loop**, and write a remediation report. A FastAPI backend serves a React + TypeScript dashboard.
+RegRadar is a multi-agent regulatory change radar for compliance teams. It
+turns regulatory documents into traceable, prioritised compliance gaps and a
+remediation plan.
 
-> The demo uses a **synthetic** dataset (RBI/MeitY-style circulars) and a fictional company, *Acme Pay*. In demo mode the LLM is replaced by a **deterministic demo responder**; the LangGraph graph, routing, validator checks and trace are real. Every demo output is labelled as such.
+The repository contains a FastAPI backend, a React dashboard, a deterministic
+demo mode, and an optional live LLM mode. The demo uses synthetic
+RBI/MeitY-style regulations and a fictional company called Acme Pay. It is
+intended for demonstration and education, not legal advice.
 
-## Highlights
+## What it does
 
-* **Six agents:** Regulatory Scout -> Obligation Extractor -> Control Mapper -> Gap Synthesiser <-> Novelty Validator -> Output Agent.
-* **Adaptive feedback loop:** the validator rejects gaps with structured feedback (issue code, field, expected value). The synthesiser receives it through shared state and revises, withdraws or defends each gap. The graph re-validates, then finalises or escalates to a human at the revision limit.
-* **Nine independent validation checks:** evidence grounding, citation consistency, already covered, already tracked (novelty), duplicates, modality, severity calibration, detail, obligation existence.
-* **Persistent execution traces** of every agent message, viewable in the dashboard.
-* **Live mode:** Anthropic or any OpenAI-compatible model (OpenAI, Groq, Gemini, Ollama), pasted circulars, RBI/SEBI RSS feeds.
-* **64 automated tests**, including tests that prove the rejection -> feedback -> revision -> re-validation sequence.
-* **Deploys to Vercel** as one project: dashboard on the CDN, FastAPI/LangGraph as a Python function, optional free Neon Postgres for persistent run history. See **[docs/deploy-vercel.md](docs/deploy-vercel.md)**.
+RegRadar runs six cooperating agents:
 
-## Quick start (Windows PowerShell)
+1. **Regulatory Scout** finds relevant documents from the demo dataset, pasted
+   text, or supported RSS sources.
+2. **Obligation Extractor** identifies obligations, modal verbs, deadlines,
+   frequencies, and retention periods.
+3. **Control Mapper** compares obligations with the internal control library.
+4. **Gap Synthesiser** proposes actionable compliance gaps.
+5. **Novelty Validator** independently checks each proposal and feeds
+   structured rejection feedback back to the synthesiser.
+6. **Output Agent** creates the prioritised remediation plan and report.
 
-Full guide with troubleshooting: **[docs/run-guide.md](docs/run-guide.md)**.
+The validator feedback loop is bounded and observable. Every agent message,
+decision, revision, and error is recorded in the execution trace.
+
+## Features
+
+- Deterministic demo mode with no API keys required.
+- Live mode for Anthropic and OpenAI-compatible providers.
+- FastAPI JSON API with interactive OpenAPI documentation.
+- React, TypeScript, and Vite dashboard.
+- Nine rule-based validation checks for grounding, citations, novelty,
+  duplicates, modality, severity, detail, and obligation existence.
+- SQLite storage by default, with optional PostgreSQL persistence.
+- Slack and n8n notification integrations.
+- Vercel deployment support.
+- Automated backend and frontend checks.
+
+## Requirements
+
+- Python 3.11 or newer
+- Node.js 18 or newer and npm
+- PowerShell on Windows (the commands below use PowerShell syntax)
+
+## Quick start
+
+### 1. Set up the backend
+
+Run these commands from the repository root:
 
 ```powershell
-# Terminal 1 - backend (project root)
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 python -m pip check
-Copy-Item .env.example .env          # optional for the demo
+Copy-Item .env.example .env
 python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+The demo does not require any values in `.env`. If PowerShell blocks
+`Activate.ps1`, run:
+
 ```powershell
-# Terminal 2 - frontend
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Alternatively, use `.\.venv\Scripts\python.exe` without activating the
+environment.
+
+### 2. Start the dashboard
+
+In a second terminal:
+
+```powershell
 cd frontend
 npm install
 npm run dev
 ```
 
-* Dashboard: <http://localhost:5173> -> click **Run deterministic demo**
-* API health: <http://127.0.0.1:8000/api/health>
-* API docs: <http://127.0.0.1:8000/docs>
+Open <http://localhost:5173> and select **Run deterministic demo**.
 
-Demo without the UI: `python -m backend.cli demo --report`, or `Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/demo/run`.
+Useful URLs:
 
-If `Activate.ps1` is blocked: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or call `.\.venv\Scripts\python.exe` directly.
+| URL | Purpose |
+| --- | --- |
+| <http://localhost:5173> | React dashboard |
+| <http://127.0.0.1:8000/docs> | FastAPI Swagger UI |
+| <http://127.0.0.1:8000/api/health> | API health check |
 
-## Tests and checks
+To run the demo without the dashboard:
 
 ```powershell
-python -m pytest                                  # all 64 backend tests
-python -m pytest tests/test_feedback_loop.py -v   # feedback-loop proof
+python -m backend.cli demo --report
+```
+
+## Testing and quality checks
+
+Run the backend tests and linting from the repository root:
+
+```powershell
+python -m pytest
 python -m ruff check backend tests
-cd frontend; npm run lint; npm run typecheck; npm run build
 ```
 
-Or run everything: `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`.
+Run frontend checks:
 
-## Deploy to Vercel
-
-Short version (full step-by-step guide with troubleshooting: **[docs/deploy-vercel.md](docs/deploy-vercel.md)**):
-
-1. Push the repo to GitHub.
-2. Vercel: **Add New > Project**, import the repo with root `./`. The FastAPI preset is detected, and `vercel.json` builds the dashboard.
-3. Optional but recommended: **Storage > Create Database > Neon** (free) to get `DATABASE_URL`, then redeploy.
-4. Optional: add `LLM_PROVIDER`, `LLM_MODEL` and an API key for live mode.
-5. Check `https://<your-app>.vercel.app/api/health`, then open the dashboard.
-
-## Environment variables
-
-None are needed for the demo. For live LLM mode set `LLM_PROVIDER`, `LLM_MODEL` and `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` (+ `OPENAI_BASE_URL`). Full table: **[docs/environment-variables.md](docs/environment-variables.md)**.
-
-## Project structure
-
+```powershell
+cd frontend
+npm run lint
+npm run typecheck
+npm run build
 ```
-backend/
-  main.py              FastAPI app (entry point backend.main:app)
-  api/routes.py        REST endpoints
-  agents/              the six agents + shared policy rules + registry
-  orchestration/       LangGraph state, graph (routing/loop/escalation), runner
-  llm/                 demo responder, Anthropic + OpenAI-compatible clients
-  retrieval/           sources (dataset, pasted docs, RSS), knowledge base, text utils
-  integrations/        Slack / n8n notifications
-  db.py, config.py, schemas.py, cli.py
-data/demo/             synthetic regulations (labelled)
-data/controls/         control library + known-issues register
-frontend/              React + TypeScript + Vite dashboard
-tests/                 pytest suites (unit, orchestration, API, sources)
-docs/                  run guide, Vercel deploy guide, env vars, architecture, demo script, Q&A, references, CA3 checklist
-n8n/                   n8n workflow (scheduled scan + Slack alert)
-scripts/verify.ps1     one-shot verification for Windows
-vercel.json, .vercelignore, .python-version   Vercel deployment config
-requirements.txt (runtime), requirements-dev.txt (tests)
-Dockerfile, frontend/Dockerfile, docker-compose.yml
+
+Or run the Windows verification script:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
 ## API overview
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/api/health` | Liveness + DB check |
-| GET | `/api/config` | Public configuration (no secrets) |
-| GET | `/api/agents`, `/api/graph` | Agent registry, graph structure |
-| GET | `/api/sources/demo-dataset`, `/api/controls` | Knowledge bases |
-| POST | `/api/demo/run` | Deterministic demo through the real graph |
-| POST | `/api/runs` | Run an analysis (`AnalysisRequest`) |
-| GET | `/api/runs`, `/api/runs/latest`, `/api/runs/{id}` | Run list and detail |
-| GET | `/api/runs/{id}/trace` | Execution trace (`?agent=`, `?message_type=`) |
-| GET | `/api/runs/{id}/coverage`, `/gaps`, `/remediation` | Agent outputs |
-| GET | `/api/runs/{id}/report?format=json\|md` | Final report |
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/health` | Check API and database availability |
+| GET | `/api/config` | Read public, non-secret configuration |
+| GET | `/api/agents`, `/api/graph` | Inspect agents and graph structure |
+| GET | `/api/sources/demo-dataset` | Inspect the synthetic source dataset |
+| GET | `/api/controls` | Inspect the control library |
+| POST | `/api/demo/run` | Run the deterministic demo |
+| POST | `/api/runs` | Start an analysis run |
+| GET | `/api/runs` | List saved runs |
+| GET | `/api/runs/{id}` | Read a run |
+| GET | `/api/runs/{id}/trace` | Read the agent execution trace |
+| GET | `/api/runs/{id}/report` | Return a JSON or Markdown report |
 | DELETE | `/api/runs/{id}` | Delete a run |
-| POST | `/api/integrations/test` | Test Slack/n8n webhooks |
+| POST | `/api/integrations/test` | Test configured webhooks |
+
+## Live mode
+
+The default demo is deterministic. To use a live model, configure the
+provider, model, and matching credential in `.env`. See
+[docs/environment-variables.md](docs/environment-variables.md) for the full
+table and supported OpenAI-compatible endpoints.
+
+Never commit `.env` or API keys. Live model output is treated as advisory;
+the rule-based validator remains authoritative.
+
+## Project structure
+
+```text
+backend/                 FastAPI app, agents, orchestration, storage, and integrations
+data/                    Synthetic regulations and the control library
+docs/                    Architecture, setup, deployment, and demo documentation
+frontend/                React + TypeScript dashboard
+n8n/                     Example scheduled notification workflow
+scripts/                 Local verification scripts
+tests/                   Backend and API tests
+standalone_examples/     Isolated examples; not imported or used by the app
+```
+
+The `standalone_examples` folder is deliberately disconnected from the
+application. It is safe to delete, ignore, or run independently and is not
+included in the backend package, test suite, Docker image, or deployment
+configuration.
 
 ## Documentation
 
-* [Run guide](docs/run-guide.md) - setup, running, testing, troubleshooting
-* [Deploy on Vercel](docs/deploy-vercel.md)
-* [Architecture](docs/architecture.md) - agents, state, graph, loop, error handling
-* [Demo script](docs/demo-script.md) - what to show and say
-* [Evaluator Q&A](docs/evaluator-qa.md)
-* [References](docs/references.md)
-* [CA3 compliance checklist](docs/ca3-compliance.md)
+- [Run guide](docs/run-guide.md) - setup, usage, and troubleshooting
+- [Architecture](docs/architecture.md) - agents, state, graph, and feedback loop
+- [Demo script](docs/demo-script.md) - suggested demonstration flow
+- [Deploy on Vercel](docs/deploy-vercel.md) - production deployment
+- [Environment variables](docs/environment-variables.md) - configuration reference
+- [Evaluator Q&A](docs/evaluator-qa.md) - design questions and answers
+- [References](docs/references.md) - supporting references
+- [CA3 checklist](docs/ca3-compliance.md) - project compliance mapping
+
+## Deployment
+
+RegRadar can be deployed as one Vercel project. Import the repository with
+the repository root as the project root. Vercel uses `vercel.json` to build
+the dashboard and exposes `backend.main:app` as the Python entry point.
+
+For persistent run history, configure a PostgreSQL `DATABASE_URL`. Without
+it, local or serverless storage is temporary. See
+[docs/deploy-vercel.md](docs/deploy-vercel.md) for the complete procedure.
 
 ## Limitations
 
-Lexical control mapping; small fictional control library; RSS feeds often contain summaries only; no authentication (single-user prototype); not legal advice.
+RegRadar is a prototype. Control mapping is primarily lexical, the bundled
+control library is small and fictional, RSS feeds may contain summaries
+instead of full circulars, and the application has no authentication.
+Results must be reviewed by a qualified compliance or legal professional.

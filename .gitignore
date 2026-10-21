@@ -10,8 +10,8 @@ __pycache__/
 requirements.lock.txt
 
 # Secrets
-.env
-.env.*
+
+
 !.env.example
 frontend/.env
 frontend/.env.*
@@ -20,6 +20,9 @@ frontend/.env.*
 # Runtime data (SQLite runs and traces)
 data/*.db
 data/*.db-*
+
+# Generated output from the disconnected standalone example
+standalone_examples/*.md
 
 # Node / frontend
 frontend/node_modules/
