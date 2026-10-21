@@ -96,6 +96,7 @@ def test_not_found_and_validation_errors(client):
     assert r.status_code == 422
     r = client.post("/api/runs", json={"mode": "demo", "unknown_field": 1})
     assert r.status_code == 422
+    assert client.delete("/api/runs/does-not-exist").status_code == 404
 
 
 def test_live_mode_without_llm_key_returns_clear_400(settings):
