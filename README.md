@@ -194,3 +194,5 @@ RegRadar is a prototype. Control mapping is primarily lexical, the bundled
 control library is small and fictional, RSS feeds may contain summaries
 instead of full circulars, and the application has no authentication.
 Results must be reviewed by a qualified compliance or legal professional.
+
+<!-- Project maintenance: documentation reviewed -->
