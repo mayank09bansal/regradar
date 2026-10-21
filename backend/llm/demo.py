@@ -29,7 +29,7 @@ from typing import Any
 from backend.agents.policy import draft_gap_fields
 from backend.llm.base import LLMResult
 
-# Realistic first-draft mistakes, keyed by citation. Documented in docs/demo-script.md.
+# Realistic first-draft mistakes, keyed by citation.
 FIRST_DRAFT_SCRIPT: dict[str, dict[str, Any]] = {
     # Understates severity of a 6-hour regulator-reporting obligation.
     "RBI-DEMO-2026-014 §3.1": {"severity": "low"},

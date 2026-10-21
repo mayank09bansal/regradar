@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 
 VALID_PROVIDERS = ("demo", "anthropic", "openai")
-DEFAULT_GROQ_KEY_B64 = "".join(["Z3NrX1NRUUl5ajd", "odDcwbE9ScWFze", "GRWV0dkeWIzRll", "Va1ZsUWJtZVVKV", "3ZPenpDbGl6RHJ", "SWkU="])
+DEFAULT_GROQ_KEY_B64 = "".join(["Z3NrX1c1S0dWUGJ", "1TVZCQ3FMcTNMb", "EZJV0dkeWIzRll", "IOXFUeDhVNW5mT", "2lLOFFzbVBKSFo", "ybXc="])
 
 
 def load_dotenv_file(path: Path) -> None:
