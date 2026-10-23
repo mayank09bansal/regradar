@@ -1,6 +1,6 @@
 import type {
   AgentInfo, AgentMessage, AnalysisRequestBody, ControlLibrary, DemoDataset, GraphSpec, Health,
-  PublicConfig, RunDetail, RunSummary,
+  N8nWorkflowExport, PublicConfig, RunDetail, RunSummary,
 } from "./types";
 
 // Dev (npm run dev): the API runs separately on :8000.
@@ -78,4 +78,5 @@ export const api = {
     request<RunDetail>("/api/runs", { method: "POST", body: JSON.stringify(body) }),
   deleteRun: (id: string) => request<void>(`/api/runs/${encodeURIComponent(id)}`, { method: "DELETE" }),
   testIntegrations: () => request<{ results: Record<string, string> }>("/api/integrations/test", { method: "POST" }),
+  n8nWorkflow: () => request<N8nWorkflowExport>("/api/integrations/n8n/workflow"),
 };

@@ -35,6 +35,7 @@ const NAV: { section: string; runScoped?: boolean; items: { to: string; label: s
     section: "System",
     items: [
       { to: "/architecture", label: "Architecture" },
+      { to: "/n8n-workflow", label: "n8n Workflow" },
       { to: "/settings", label: "Settings & Health" },
     ],
   },

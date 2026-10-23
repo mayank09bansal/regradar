@@ -226,6 +226,14 @@ export interface GraphSpec {
   edges: { from: string; to: string; condition?: string }[];
 }
 
+/** n8n workflow export (n8n/regradar_workflow.json), served by /api/integrations/n8n/workflow. */
+export interface N8nWorkflowExport {
+  name: string;
+  nodes: { id: string; name: string; type: string; typeVersion: number; position: [number, number]; parameters: Record<string, unknown> }[];
+  connections: Record<string, { main: { node: string; type: string; index: number }[][] }>;
+  settings?: Record<string, unknown>;
+}
+
 export interface PublicConfig {
   app_env: string;
   llm_provider: string;
