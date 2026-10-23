@@ -28,7 +28,7 @@ def load_changes(path: Path) -> list[dict[str, Any]]:
         missing = sorted(required - item.keys())
         if missing:
             raise ValueError(f"Change {index} is missing: {', '.join(missing)}")
-        severity = str(item["severity"]).lower()
+        severity = str(item["severity"]).strip().lower()
         if severity not in SEVERITY_ORDER:
             raise ValueError(f"Change {index} has unsupported severity: {severity}")
         changes.append({**item, "severity": severity})
