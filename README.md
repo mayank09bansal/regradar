@@ -198,6 +198,7 @@ npm run build
 | `GET` | `/api/runs/{id}/report` | Final compliance report (JSON or Markdown) |
 | `DELETE` | `/api/runs/{id}` | Delete a run and its trace |
 | `POST` | `/api/integrations/test` | Test Slack and n8n webhook notifications |
+| `GET` | `/api/integrations/n8n/workflow` | The importable n8n workflow export (shown on the dashboard's **n8n Workflow** page) |
 
 ---
 
@@ -221,7 +222,7 @@ data/
   demo/                # Labelled synthetic regulatory circulars
 frontend/              # React + TypeScript + Vite dashboard
 tests/                 # Pytest test suite (unit, feedback-loop, API)
-n8n/                   # n8n scheduled workflow definition
+n8n/                   # n8n scheduled workflow definition (visualised at /n8n-workflow)
 scripts/
   verify.ps1           # Complete end-to-end test and build verification
 standalone_examples/   # Standalone CLI tools and sample payloads

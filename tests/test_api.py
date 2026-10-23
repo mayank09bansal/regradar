@@ -43,6 +43,18 @@ def test_static_knowledge_endpoints(client):
     assert len(client.get("/api/controls").json()["controls"]) == 16
 
 
+def test_n8n_workflow_export(client):
+    wf = client.get("/api/integrations/n8n/workflow").json()
+    names = {n["name"] for n in wf["nodes"]}
+    assert set(wf["connections"]) <= names
+    http = next(n for n in wf["nodes"] if n["type"] == "n8n-nodes-base.httpRequest" and "/api/demo/run" in n["parameters"]["url"])
+    assert http["parameters"]["method"] == "POST"
+    # URLs come from n8n's environment at runtime, never literals committed to the export
+    slack = next(n for n in wf["nodes"] if "Slack" in n["name"])
+    assert slack["parameters"]["url"] == "={{ $env.SLACK_WEBHOOK_URL }}"
+    assert "hooks.slack.com" not in client.get("/api/integrations/n8n/workflow").text
+
+
 def test_config_has_no_secrets(settings):
     secret = "sk-test-should-never-leak"
     app = create_app(replace(settings, anthropic_api_key=secret))

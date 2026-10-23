@@ -7,6 +7,7 @@ import CoveragePage from "./pages/CoveragePage";
 import DashboardPage from "./pages/DashboardPage";
 import FeedbackLoopPage from "./pages/FeedbackLoopPage";
 import GapsPage from "./pages/GapsPage";
+import N8nWorkflowPage from "./pages/N8nWorkflowPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import RegulationsPage from "./pages/RegulationsPage";
 import RemediationPage from "./pages/RemediationPage";
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="regulations" element={<RegulationsPage />} />
           <Route path="controls" element={<ControlsPage />} />
           <Route path="architecture" element={<ArchitecturePage />} />
+          <Route path="n8n-workflow" element={<N8nWorkflowPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

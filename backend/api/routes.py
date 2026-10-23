@@ -12,6 +12,7 @@ from backend import __version__
 from backend.agents import AGENT_REGISTRY
 from backend.config import Settings
 from backend.db import RunStore
+from backend.integrations.n8n import load_n8n_workflow
 from backend.integrations.notify import notify_run_completed
 from backend.llm.base import LLMAuthError
 from backend.orchestration.graph import GRAPH_SPEC
@@ -207,6 +208,15 @@ def get_report(
             headers={"Content-Disposition": f'attachment; filename="regradar-{run_id}.md"'},
         )
     return report
+
+
+@router.get("/integrations/n8n/workflow")
+def n8n_workflow() -> dict[str, Any]:
+    """The importable n8n workflow export. It holds no secrets: URLs are read from n8n's $env at runtime."""
+    try:
+        return load_n8n_workflow()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"n8n workflow export not found: {exc.filename}") from exc
 
 
 @router.post("/integrations/test")

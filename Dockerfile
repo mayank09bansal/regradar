@@ -11,6 +11,7 @@ RUN pip install -r requirements.txt
 
 COPY backend ./backend
 COPY data ./data
+COPY n8n ./n8n
 COPY tests ./tests
 COPY pyproject.toml .
 
