@@ -1,0 +1,129 @@
+// import { useState } from "react";
+// import { Link, useNavigate } from "react-router-dom";
+// import { api } from "../api";
+// import { useAsync } from "../hooks";
+// import { formatDateTime, shortId } from "../lib";
+// import { Card, EmptyState, ErrorBox, Loading, ModeBadge, PageHeader, Stat, StatusPill } from "../components/ui";
+
+// const PIPELINE = [
+//   ["Regulatory Scout", "retrieve"],
+//   ["Obligation Extractor", "extract"],
+//   ["Control Mapper", "map"],
+//   ["Gap Synthesiser", "propose"],
+//   ["Novelty Validator", "validate"],
+//   ["Output Agent", "report"],
+// ];
+
+// export default function DashboardPage() {
+//   const latest = useAsync(() => api.latestRun().catch(() => null), "dash-latest");
+//   const runs = useAsync(() => api.runs(6), "dash-runs");
+//   const health = useAsync(() => api.health(), "dash-health");
+//   const [running, setRunning] = useState(false);
+//   const [runError, setRunError] = useState<string | null>(null);
+//   const navigate = useNavigate();
+
+//   async function runDemo() {
+//     setRunning(true);
+//     setRunError(null);
+//     try {
+//       const run = await api.runDemo();
+//       navigate(`/runs/${run.id}/feedback-loop`);
+//     } catch (err) {
+//       setRunError(err instanceof Error ? err.message : String(err));
+//     } finally {
+//       setRunning(false);
+//     }
+//   }
+
+//   const run = latest.data;
+//   const s = run?.stats;
+
+//   return (
+//     <>
+//       <PageHeader
+//         title="Dashboard"
+//         subtitle="Six LangGraph agents turn regulatory change into validated, prioritised compliance gaps."
+//         actions={
+//           <button className="btn btn-primary" onClick={runDemo} disabled={running}>
+//             {running ? "Running demo graph..." : "Run deterministic demo"}
+//           </button>
+//         }
+//       />
+//       {runError && <ErrorBox error={runError} />}
+//       {health.data && !health.data.storage_persistent && (
+//         <div className="notice warn">
+//           <strong>Temporary run storage.</strong> Runs are kept in {health.data.storage} and may disappear when the
+//           {health.data.deployment === "vercel" ? " serverless instance restarts" : " server stops"}. Connect a PostgreSQL
+//           database (DATABASE_URL) to keep run history and traces.
+//         </div>
+//       )}
+
+//       <div className="pipeline" aria-label="Agent pipeline">
+//         {PIPELINE.map(([name, verb], i) => (
+//           <div key={name} className={`pipe-step ${i === 3 || i === 4 ? "loop" : ""}`}>
+//             <span className="pipe-num">{i + 1}</span>
+//             <span className="pipe-name">{name}</span>
+//             <span className="pipe-verb">{verb}</span>
+//           </div>
+//         ))}
+//         <div className="pipe-loop-note">Synthesiser and Validator loop until gaps pass validation or the revision limit escalates them.</div>
+//       </div>
+
+//       {latest.loading ? <Loading /> : latest.error ? <ErrorBox error={latest.error} onRetry={latest.reload} /> : !run ? (
+//         <EmptyState title="No runs yet">
+//           <p>Click <strong>Run deterministic demo</strong> to execute the full graph on the synthetic dataset. No API key is required.</p>
+//         </EmptyState>
+//       ) : (
+//         <>
+//           <Card
+//             title={<>Latest run <span className="mono small">{shortId(run.id)}</span></>}
+//             actions={<div className="row gap-s"><ModeBadge mode={run.mode} /><StatusPill status={run.status} /></div>}
+//           >
+//             <div className="stats-grid">
+//               <Stat label="Obligations" value={s?.obligations ?? "-"} hint={`${s?.documents ?? 0} documents`} />
+//               <Stat label="Fully covered" value={`${s?.coverage_pct ?? 0}%`} hint={`${s?.covered ?? 0} covered / ${s?.partial ?? 0} partial / ${s?.gap ?? 0} gap`} tone="info" />
+//               <Stat label="Accepted gaps" value={s?.accepted_gaps ?? "-"} tone="good" hint={`${s?.proposed_gaps ?? 0} proposed`} />
+//               <Stat label="Rejections" value={s?.rejection_events ?? "-"} tone="warn" hint={`${s?.validation_rounds ?? 0} validation rounds`} />
+//               <Stat label="Revision cycles" value={s?.revision_cycles ?? "-"} tone="warn" hint={s?.feedback_loop_triggered ? "feedback loop triggered" : "no rejections"} />
+//               <Stat label="Escalated" value={s?.escalated_gaps ?? "-"} tone="bad" hint="needs human review" />
+//             </div>
+//             <div className="row gap-s wrap mt">
+//               <Link className="btn btn-secondary" to={`/runs/${run.id}/feedback-loop`}>View feedback loop</Link>
+//               <Link className="btn btn-secondary" to={`/runs/${run.id}/trace`}>Agent trace</Link>
+//               <Link className="btn btn-secondary" to={`/runs/${run.id}/remediation`}>Remediation plan</Link>
+//               <Link className="btn btn-secondary" to={`/runs/${run.id}/report`}>Final report</Link>
+//             </div>
+//           </Card>
+//           {run.report && (
+//             <Card title="Executive summary">
+//               <p>{run.report.executive_summary}</p>
+//               <p className="muted small">{run.report.reasoning_note}</p>
+//             </Card>
+//           )}
+//         </>
+//       )}
+
+//       <Card title="Recent runs" actions={<Link to="/runs">All runs</Link>}>
+//         {runs.loading ? <Loading /> : runs.error ? <ErrorBox error={runs.error} /> : runs.data && runs.data.length > 0 ? (
+//           <div className="table-wrap">
+//             <table>
+//               <thead><tr><th>Run</th><th>Started</th><th>Mode</th><th>Status</th><th>Accepted</th><th>Escalated</th></tr></thead>
+//               <tbody>
+//                 {runs.data.map((r) => (
+//                   <tr key={r.id}>
+//                     <td><Link className="mono" to={`/runs/${r.id}`}>{shortId(r.id)}</Link></td>
+//                     <td>{formatDateTime(r.created_at)}</td>
+//                     <td>{r.mode}</td>
+//                     <td><StatusPill status={r.status} /></td>
+//                     <td>{r.stats.accepted_gaps ?? "-"}</td>
+//                     <td>{r.stats.escalated_gaps ?? "-"}</td>
+//                   </tr>
+//                 ))}
+//               </tbody>
+//             </table>
+//           </div>
+//         ) : <p className="muted">No runs recorded.</p>}
+//       </Card>
+//     </>
+//   );
+// }
