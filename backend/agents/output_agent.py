@@ -10,8 +10,11 @@ from backend.agents.base import Agent, MessageBuffer
 from backend.retrieval.knowledge import controls_by_id, load_control_library
 from backend.schemas import GapProposal, RemediationItem, Report, utcnow
 
+# Base of the risk score. The P1/P2 cut-offs in OutputAgent.prioritise are calibrated against it.
 SEVERITY_WEIGHT = {"critical": 10.0, "high": 7.0, "medium": 4.0, "low": 2.0}
+# Days allowed to remediate at each priority, counted from the analysis date.
 PRIORITY_SLA_DAYS = {"P1": 30, "P2": 60, "P3": 90}
+# Fallback owner when a gap has no related control. Dict order sets precedence.
 TOPIC_OWNERS = {  # checked in this priority order
     "data protection": "Data Protection Officer",
     "incident reporting": "CISO",
@@ -19,16 +22,26 @@ TOPIC_OWNERS = {  # checked in this priority order
     "governance": "Company Secretary",
     "resilience": "Chief Risk Officer",
 }
+# "Use only the facts provided" keeps a board-facing summary tied to computed statistics.
 SYSTEM_SUMMARY = (
     "You are writing the executive summary of a regulatory compliance gap report for the board. "
     "Use only the facts provided. 4-6 sentences, plain English, no markdown."
 )
+# Always included in the report; run() adds a synthetic-data warning when relevant.
 DISCLAIMERS = [
     "RegRadar is an academic decision-support prototype; findings must be reviewed by a qualified compliance professional.",
 ]
 
 
 def urgency_factor(effective: date | None, today: date) -> tuple[float, str]:
+    """Convert time until a requirement takes effect into a score multiplier.
+
+    Multipliers: 1.6 once effective, 1.4 within 30 days, 1.2 within 90 days, 1.0 beyond
+    that. An unknown date gets 1.1: uncertain, so it is not treated as the most relaxed case.
+
+    Returns:
+        The multiplier and a phrase explaining it, used in remediation actions.
+    """
     if effective is None:
         return 1.1, "effective date unknown"
     days = (effective - today).days
@@ -42,11 +55,34 @@ def urgency_factor(effective: date | None, today: date) -> tuple[float, str]:
 
 
 class OutputAgent(Agent):
+    """Agent 6: turns validated gaps into the remediation plan and final report.
+
+    It only reports gaps the validator accepted; escalated and withdrawn gaps are
+    listed separately so they cannot be mistaken for confirmed findings.
+    """
     name = "output_agent"
     display_name = "Output Agent"
     role = "Scores accepted gaps (severity x urgency x exposure), builds the remediation plan and writes the final report."
 
     def prioritise(self, gaps: list[GapProposal], obligations: dict[str, dict], today: date) -> list[RemediationItem]:
+        """Score gaps and build a ranked remediation plan.
+
+        Score = severity weight x urgency x exposure x classification factor.
+        Exposure is 1.25 for incident reporting and data protection topics, and
+        advisory gaps count half. Scores of 10+ are P1, 5+ are P2, the rest P3.
+
+        The target date is the priority SLA, moved earlier to the effective date
+        when that comes first. An owner comes from the first related control,
+        then ``TOPIC_OWNERS``, then the Chief Compliance Officer.
+
+        Args:
+            gaps: Accepted gaps.
+            obligations: Source obligations by id.
+            today: Analysis date, used for urgency and target dates.
+
+        Returns:
+            Items sorted by score, then target date, then gap id, with ``rank`` set.
+        """
         controls = controls_by_id()
         items: list[RemediationItem] = []
         for gap in gaps:
@@ -78,6 +114,11 @@ class OutputAgent(Agent):
         return items
 
     def build_stats(self, state, gaps: list[GapProposal]) -> dict[str, Any]:
+        """Compute the run statistics used by the report and dashboard.
+
+        ``coverage_pct`` counts fully covered obligations only; partial coverage
+        is reported separately so the headline figure is not inflated.
+        """
         coverage = state.get("coverage", [])
         counts = {k: sum(1 for c in coverage if c["status"] == k) for k in ("covered", "partial", "gap")}
         decisions = state.get("validation_decisions", [])
@@ -100,6 +141,15 @@ class OutputAgent(Agent):
         }
 
     def run(self, state, buf: MessageBuffer) -> dict[str, Any]:
+        """Build the plan, summary and report, then finish the run.
+
+        The summary falls back to the demo template if the LLM fails or returns
+        nothing usable, and records that source. A run therefore always gets a
+        report, and readers can see how the summary was produced.
+
+        Returns:
+            State update with the plan, the report and ``status`` set to completed.
+        """
         today = self.ctx.analysis_date
         gaps = [GapProposal.model_validate(g) for g in state.get("gaps", [])]
         obligations = {o["id"]: o for o in state.get("obligations", [])}
@@ -175,10 +225,20 @@ class OutputAgent(Agent):
 
 
 def _md_escape(text: str) -> str:
+    """Make text safe for a Markdown table cell (pipes and newlines would break the row)."""
     return text.replace("|", "\\|").replace("\n", " ")
 
 
 def render_markdown(r: Report, source_errors: list[str]) -> str:
+    """Render the report as the Markdown document shown and downloaded by users.
+
+    Args:
+        r: Completed report model.
+        source_errors: Retrieval failures, listed so missing sources stay visible.
+
+    Returns:
+        Complete Markdown text.
+    """
     s = r.stats
     out = [
         f"# RegRadar Compliance Gap Report - run `{r.run_id}`",

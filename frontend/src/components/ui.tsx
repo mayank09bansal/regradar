@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { CoverageStatus, GapStatus, Severity } from "../types";
 
+/** Page title block, holding the page's single h1. */
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
     <header className="page-header">
@@ -13,6 +14,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   );
 }
 
+/** Bordered content section; the header row renders only when needed. */
 export function Card({ title, children, actions, className = "" }: {
   title?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string;
 }) {
@@ -29,6 +31,7 @@ export function Card({ title, children, actions, className = "" }: {
   );
 }
 
+/** Headline number with a label and an optional hint. */
 export function Stat({ label, value, hint, tone = "default" }: {
   label: string; value: ReactNode; hint?: ReactNode; tone?: "default" | "good" | "warn" | "bad" | "info";
 }) {
@@ -41,6 +44,7 @@ export function Stat({ label, value, hint, tone = "default" }: {
   );
 }
 
+/** Status value to colour tone, so every status looks the same on every page. */
 const STATUS_TONE: Record<string, string> = {
   covered: "good", accepted: "good", completed: "good", accept: "good",
   partial: "warn", revised: "warn", proposed: "info", running: "info",
@@ -48,22 +52,27 @@ const STATUS_TONE: Record<string, string> = {
   escalated: "esc", withdrawn: "muted",
 };
 
+/** Rounded label; the tone defaults from STATUS_TONE. */
 export function Pill({ value, tone }: { value: string; tone?: string }) {
   return <span className={`pill tone-${tone ?? STATUS_TONE[value] ?? "muted"}`}>{value}</span>;
 }
 
+/** Pill for any run, gap, coverage or decision status. */
 export function StatusPill({ status }: { status: GapStatus | CoverageStatus | string }) {
   return <Pill value={status} />;
 }
 
+/** Colour-coded gap severity. */
 export function SeverityBadge({ severity }: { severity: Severity }) {
   return <span className={`sev sev-${severity}`}>{severity}</span>;
 }
 
+/** Spinner with text, announced to screen readers through role="status". */
 export function Loading({ label = "Loading..." }: { label?: string }) {
   return <div className="loading" role="status"><span className="spinner" aria-hidden />{label}</div>;
 }
 
+/** Error message, announced immediately through role="alert". */
 export function ErrorBox({ error, onRetry }: { error: string; onRetry?: () => void }) {
   return (
     <div className="error-box" role="alert">
@@ -74,6 +83,7 @@ export function ErrorBox({ error, onRetry }: { error: string; onRetry?: () => vo
   );
 }
 
+/** Placeholder explaining why a section has no content. */
 export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="empty">
@@ -83,6 +93,7 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
   );
 }
 
+/** Collapsed JSON viewer; the content renders only when opened, as traces can be large. */
 export function JsonView({ value, label = "Payload" }: { value: unknown; label?: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -95,6 +106,7 @@ export function JsonView({ value, label = "Payload" }: { value: unknown; label?:
   );
 }
 
+/** Labels a run as demo or live, so synthetic results are never presented as real. */
 export function ModeBadge({ mode }: { mode: string }) {
   return (
     <span className={`mode-badge mode-${mode}`} title={mode === "demo"

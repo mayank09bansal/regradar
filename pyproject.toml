@@ -16,7 +16,8 @@ dev = ["pytest>=8.0", "httpx>=0.27,<1.0", "ruff>=0.6"]
 
 # ---- Vercel ------------------------------------------------------------------
 # Vercel loads the FastAPI instance `app` from backend/main.py. The dashboard is
-# built by vercel.json's buildCommand into frontend/dist and served via app.frontend().
+# the separate `frontend` service in vercel.json. frontend/dist is build output and
+# is not tracked: run `npm run build` to have FastAPI serve it locally via app.frontend().
 [tool.vercel]
 entrypoint = "backend.main:app"
 

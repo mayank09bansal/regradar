@@ -12,6 +12,7 @@ from typing import Any
 
 from backend.schemas import SEVERITY_ORDER
 
+# A deadline only drives severity when the sentence is about telling someone, not doing a task.
 REPORTING_WORDS = re.compile(r"\b(report|notify|notification|inform)\b", re.I)
 
 
@@ -40,6 +41,18 @@ def minimum_severity(obligation: dict[str, Any]) -> tuple[str, list[str]]:
 
 
 def short_summary(text: str, limit: int = 72) -> str:
+    """Shorten an obligation into a readable gap title fragment.
+
+        Drops the leading subject ("Regulated entities") and modal verb, capitalises
+        the result, then truncates at a word boundary so titles never end mid-word.
+
+        Args:
+            text: Obligation sentence.
+            limit: Maximum characters before truncation.
+
+        Returns:
+            The summary without a trailing period, or ending in "..." if truncated.
+    """
     text = re.sub(r"^(Regulated entities|A data fiduciary|The data fiduciary|Every|The board)\s+", "", text.strip())
     text = re.sub(r"^(shall|must|should|may)\s+", "", text)
     text = text[0].upper() + text[1:] if text else text

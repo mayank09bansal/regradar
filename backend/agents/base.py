@@ -18,6 +18,14 @@ class MessageBuffer:
     """Collects messages emitted during one node execution, numbering them globally."""
 
     def __init__(self, state: RegRadarState, ctx: RunContext, sender: str):
+        """Start a buffer for one node execution.
+
+        Args:
+            state: Shared graph state. Its trace length gives the offset that keeps
+                ``seq`` numbers increasing across every node of the run.
+            ctx: Run-wide context, used here for the run id on each message.
+            sender: Default sender for messages emitted through this buffer.
+        """
         self._offset = len(state.get("trace") or [])
         self.ctx = ctx
         self.sender = sender
@@ -34,6 +42,24 @@ class MessageBuffer:
         llm: LLMUsage | None = None,
         sender: str | None = None,
     ) -> dict[str, Any]:
+        """Validate one trace message and append it to the buffer.
+
+        Building an ``AgentMessage`` first means a malformed message fails here,
+        at the agent that wrote it, instead of later when the trace is persisted.
+
+        Args:
+            recipient: Agent (or "orchestrator" / "human_reviewer") the message targets.
+            message_type: One of the ``MessageType`` values shown in the trace filter.
+            summary: One-line, human-readable description for the dashboard.
+            payload: Structured detail shown behind "Show payload".
+            revision_round: Feedback-loop cycle this message belongs to.
+            duration_ms: Elapsed time, rounded to two decimals when supplied.
+            llm: Which reasoning source produced this message, if any.
+            sender: Overrides the buffer's default sender.
+
+        Returns:
+            The JSON-ready message dict that was appended.
+        """
         msg = AgentMessage(
             id=uuid.uuid4().hex[:12],
             run_id=self.ctx.run_id,
@@ -61,9 +87,19 @@ class Agent:
     role: str = ""
 
     def __init__(self, ctx: RunContext):
+        """Keep the run context; agents hold no other state between graph nodes."""
         self.ctx = ctx
 
     def __call__(self, state: RegRadarState) -> dict[str, Any]:
+        """Execute the agent as a LangGraph node.
+
+        Wraps ``run`` with the behaviour every node shares: timing, a trace entry
+        for failures, and the ``trace`` and ``route_history`` state updates.
+
+        Raises:
+            AgentFailure: If ``run`` raises. It carries the messages emitted so far,
+                so the persisted trace shows what happened before the failure.
+        """
         buf = MessageBuffer(state, self.ctx, self.name)
         started = time.perf_counter()
         try:
@@ -81,6 +117,7 @@ class Agent:
         return update
 
     def run(self, state: RegRadarState, buf: MessageBuffer) -> dict[str, Any]:  # pragma: no cover
+        """Do the agent's work and return the state keys it changed."""
         raise NotImplementedError
 
     # ------------------------------------------------------------- LLM helper
@@ -104,6 +141,7 @@ class Agent:
 
 
 class AgentFailure(RuntimeError):
+    """An agent crashed; carries its partial trace so the run can be stored as failed."""
     def __init__(self, agent: str, message: str, messages: list[dict[str, Any]]):
         super().__init__(f"{agent}: {message}")
         self.agent = agent

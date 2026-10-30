@@ -9,7 +9,6 @@ No secret ever has a default value, and secrets are never included in ``public_d
 
 from __future__ import annotations
 
-import base64
 import os
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -19,7 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 
 VALID_PROVIDERS = ("demo", "anthropic", "openai")
-DEFAULT_GROQ_KEY_B64 = "".join(["Z3NrX1c1S0dWUGJ", "1TVZCQ3FMcTNMb", "EZJV0dkeWIzRll", "IOXFUeDhVNW5mT", "2lLOFFzbVBKSFo", "ybXc="])
+LOCAL_LLM_URL_PREFIXES = ("http://localhost", "http://127.0.0.1")  # OpenAI-compatible servers needing no key
 
 
 def load_dotenv_file(path: Path) -> None:
@@ -48,6 +47,7 @@ def load_dotenv_file(path: Path) -> None:
 
 
 def _bool(name: str, default: bool) -> bool:
+    """Read a boolean variable; 1, true, yes and on are true, unset or blank gives the default."""
     raw = os.environ.get(name)
     if raw is None or raw.strip() == "":
         return default
@@ -55,6 +55,12 @@ def _bool(name: str, default: bool) -> bool:
 
 
 def _int(name: str, default: int, minimum: int | None = None, maximum: int | None = None) -> int:
+    """Read an integer variable, optionally bounded.
+
+    Raises:
+        ValueError: If the value is not an integer or is out of range, so a bad
+            setting stops startup with a clear message.
+    """
     raw = os.environ.get(name, "").strip()
     try:
         value = int(raw) if raw else default
@@ -68,6 +74,11 @@ def _int(name: str, default: int, minimum: int | None = None, maximum: int | Non
 
 
 def _float(name: str, default: float) -> float:
+    """Read a float variable.
+
+    Raises:
+        ValueError: If the value is not a number.
+    """
     raw = os.environ.get(name, "").strip()
     try:
         return float(raw) if raw else default
@@ -76,11 +87,16 @@ def _float(name: str, default: float) -> float:
 
 
 def _str(name: str, default: str = "") -> str:
+    """Read a string variable with surrounding whitespace removed."""
     return os.environ.get(name, default).strip()
 
 
 @dataclass(frozen=True)
 class Settings:
+    """Immutable application configuration.
+
+    Secret fields use ``repr=False`` so that logging the settings cannot print them.
+    """
     app_env: str = "development"
     log_level: str = "INFO"
     database_url: str = "sqlite:///./data/regradar.db"
@@ -105,6 +121,9 @@ class Settings:
     slack_webhook_url: str = field(default="", repr=False)
     n8n_webhook_url: str = field(default="", repr=False)
 
+    # When set, every write endpoint requires "Authorization: Bearer <token>"
+    api_token: str = field(default="", repr=False)
+
     # Deployment
     on_vercel: bool = False
     serve_frontend: bool = True          # serve frontend/dist from FastAPI when it exists
@@ -112,10 +131,12 @@ class Settings:
 
     @property
     def is_postgres(self) -> bool:
+        """True when DATABASE_URL points at PostgreSQL."""
         return self.database_url.startswith(("postgres://", "postgresql://"))
 
     @property
     def storage_persistent(self) -> bool:
+        """False for /tmp SQLite on Vercel, where data is lost between instances."""
         if self.is_postgres:
             return True
         path = self.database_path
@@ -134,6 +155,7 @@ class Settings:
 
     @property
     def frontend_path(self) -> Path:
+        """Absolute path of the built dashboard; relative paths start at the project root."""
         path = Path(self.frontend_dir)
         return path if path.is_absolute() else (PROJECT_ROOT / path).resolve()
 
@@ -155,6 +177,7 @@ class Settings:
 
     @property
     def effective_model(self) -> str:
+        """Configured model, or the demo responder's name for the demo provider."""
         if self.llm_model:
             return self.llm_model
         if self.llm_provider == "demo":
@@ -163,11 +186,11 @@ class Settings:
 
     @property
     def live_llm_configured(self) -> bool:
+        """True when the selected provider has what it needs for live runs."""
         if self.llm_provider == "anthropic":
             return bool(self.anthropic_api_key and self.effective_model)
         if self.llm_provider == "openai":
-            # Local OpenAI-compatible servers (e.g. Ollama) do not need a key.
-            local = self.openai_base_url.startswith(("http://localhost", "http://127.0.0.1"))
+            local = self.openai_base_url.startswith(LOCAL_LLM_URL_PREFIXES)
             return bool((self.openai_api_key or local) and self.effective_model)
         return False
 
@@ -187,6 +210,7 @@ class Settings:
             "sebi_rss_url": self.sebi_rss_url,
             "slack_configured": bool(self.slack_webhook_url),
             "n8n_configured": bool(self.n8n_webhook_url),
+            "write_auth_required": bool(self.api_token),
             "cors_origins": list(self.cors_origins),
             "database": self.database_label,
             "storage_persistent": self.storage_persistent,
@@ -195,6 +219,11 @@ class Settings:
 
 
 def build_settings() -> Settings:
+    """Load .env, read the environment and validate everything into ``Settings``.
+
+    Raises:
+        ValueError: If LLM_PROVIDER or a numeric setting is invalid.
+    """
     load_dotenv_file(PROJECT_ROOT / ".env")
     provider = _str("LLM_PROVIDER", "openai").lower() or "openai"
     if provider not in VALID_PROVIDERS:
@@ -222,7 +251,7 @@ def build_settings() -> Settings:
         llm_max_retries=_int("LLM_MAX_RETRIES", 2, 0, 5),
         anthropic_api_key=_str("ANTHROPIC_API_KEY"),
         anthropic_base_url=_str("ANTHROPIC_BASE_URL", "https://api.anthropic.com").rstrip("/"),
-        openai_api_key=_str("OPENAI_API_KEY") or base64.b64decode(DEFAULT_GROQ_KEY_B64).decode("utf-8"),
+        openai_api_key=_str("OPENAI_API_KEY"),
         openai_base_url=_str("OPENAI_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/"),
         max_revisions=_int("MAX_REVISIONS", 2, 0, 5),
         live_sources_enabled=_bool("LIVE_SOURCES_ENABLED", True),
@@ -231,6 +260,7 @@ def build_settings() -> Settings:
         sebi_rss_url=_str("SEBI_RSS_URL", "https://www.sebi.gov.in/sebirss.xml"),
         slack_webhook_url=_str("SLACK_WEBHOOK_URL"),
         n8n_webhook_url=_str("N8N_WEBHOOK_URL"),
+        api_token=_str("REGRADAR_API_TOKEN"),
         on_vercel=on_vercel,
         serve_frontend=_bool("SERVE_FRONTEND", True),
         frontend_dir=_str("FRONTEND_DIR", "frontend/dist"),
@@ -239,8 +269,10 @@ def build_settings() -> Settings:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """Return the process-wide settings, built once."""
     return build_settings()
 
 
 def reset_settings_cache() -> None:
+    """Forget cached settings so the next call re-reads the environment."""
     get_settings.cache_clear()

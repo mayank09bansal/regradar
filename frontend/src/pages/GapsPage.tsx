@@ -4,8 +4,10 @@ import { Card, EmptyState, SeverityBadge, StatusPill } from "../components/ui";
 import { reasoningLabel } from "../lib";
 import type { Gap, RunDetail } from "../types";
 
+/** Final gap states a user can filter by. */
 const FILTERS = ["all", "accepted", "escalated", "withdrawn"] as const;
 
+/** One gap with its evidence and full validator decision history. */
 function GapCard({ gap, run }: { gap: Gap; run: RunDetail }) {
   const decisions = run.validation_decisions.filter((d) => d.gap_id === gap.id);
   return (
@@ -49,6 +51,7 @@ function GapCard({ gap, run }: { gap: Gap; run: RunDetail }) {
   );
 }
 
+/** Every gap proposal, filterable by final status. */
 export default function GapsPage() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("all");
   return (

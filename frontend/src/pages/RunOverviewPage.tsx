@@ -2,6 +2,7 @@ import RunScope from "../components/RunScope";
 import { Card, Stat } from "../components/ui";
 import { agentLabel, formatDateTime } from "../lib";
 
+/** Summary of one run: figures, executed route and documents. */
 export default function RunOverviewPage() {
   return (
     <RunScope title="Run Overview" subtitle="What happened in this run, step by step.">

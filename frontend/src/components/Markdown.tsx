@@ -2,6 +2,10 @@ import type { ReactNode } from "react";
 
 /** Minimal Markdown renderer for RegRadar reports (headings, tables, lists, quotes, emphasis, code). */
 
+/**
+ * Render inline emphasis, code and autolinks as React nodes. Links are limited to
+ * http(s) by the regex, and text is never injected as HTML, so report content is safe.
+ */
 function inline(text: string, keyBase: string): ReactNode[] {
   const out: ReactNode[] = [];
   const re = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|<https?:\/\/[^>]+>)/g;
@@ -22,6 +26,7 @@ function inline(text: string, keyBase: string): ReactNode[] {
   return out;
 }
 
+/** Split a table row on unescaped pipes, then restore escaped ones. */
 function splitRow(line: string): string[] {
   return line.trim().replace(/^\||\|$/g, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
 }

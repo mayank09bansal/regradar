@@ -22,6 +22,7 @@ class LLMResponseError(LLMError):
 
 @dataclass
 class LLMResult:
+    """Parsed model output plus the provenance shown in the trace."""
     data: dict[str, Any]
     provider: str
     model: str
@@ -32,6 +33,11 @@ class LLMResult:
 
 
 class LLMClient(Protocol):
+    """Interface shared by the live providers and the demo responder.
+
+    Agents depend only on this, so demo and live runs execute the same graph.
+    ``is_live`` gates steps that are skipped without a real model.
+    """
     provider: str
     model: str
     is_live: bool
@@ -45,6 +51,7 @@ class LLMClient(Protocol):
         ...
 
 
+# Models often wrap JSON in Markdown code fences despite being asked not to.
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
 
 

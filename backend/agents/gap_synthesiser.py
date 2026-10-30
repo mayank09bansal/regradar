@@ -17,18 +17,23 @@ from backend.agents.policy import draft_gap_fields
 from backend.retrieval.knowledge import load_control_library
 from backend.schemas import GapProposal, GapRevisionRecord, LLMUsage
 
+# First-pass instructions: the emphasis on verbatim quotes and exact citations mirrors
+# what the Novelty Validator later enforces, so a good draft passes on the first round.
 SYSTEM_DRAFT = (
     "You are a senior compliance analyst at a digital payments company. Given obligations and a "
     "coverage matrix (obligation -> best matching internal control), propose specific, actionable "
     "compliance gaps. Quote the regulation verbatim as evidence, cite it exactly, calibrate severity "
     "(low/medium/high/critical), and classify each gap as mandatory or advisory based on the modal verb."
 )
+# Revision instructions: the three actions map directly to the branches in GapSynthesiser._apply.
 SYSTEM_REVISE = (
     "You are a senior compliance analyst. An independent validator rejected some of your gap "
     "proposals with structured feedback. For each rejected gap decide: 'revise' (fix every issue), "
     "'withdraw' (if the validator is right that the gap is not real or not novel) or 'maintain' (only "
     "if you can justify it). Respond to the feedback explicitly."
 )
+# Allow-list for LLM revisions. Identity and workflow fields (id, status, revision, history)
+# are deliberately missing so that a model response can never rewrite the audit trail.
 REVISABLE_FIELDS = (
     "title", "description", "gap_type", "severity", "classification", "evidence_quote",
     "citation", "related_control_ids", "recommended_action",
@@ -36,12 +41,22 @@ REVISABLE_FIELDS = (
 
 
 class GapSynthesiser(Agent):
+    """Agent 4: one side of the feedback loop; ``run`` chooses draft or revise.
+
+    It never decides whether a gap is valid. That is the validator's job, so the
+    two roles stay independent.
+    """
     name = "gap_synthesiser"
     display_name = "Gap Synthesiser"
     role = "Drafts gap proposals from the coverage matrix and revises them using the validator's structured feedback."
 
     # ---------------------------------------------------------------- drafting
     def _draft_payload(self, state) -> dict[str, Any]:
+        """Collect the structured context for drafting.
+
+        The demo responder and the template fallback read this directly; live
+        models receive the same facts rendered by ``_draft_prompt``.
+        """
         lib = load_control_library()
         return {
             "coverage": state.get("coverage", []),
@@ -51,6 +66,11 @@ class GapSynthesiser(Agent):
         }
 
     def _draft_prompt(self, payload: dict[str, Any]) -> str:
+        """Render the draft context into a prompt, trimmed to the fields a model needs.
+
+        Unused coverage and control fields are dropped to keep the prompt small.
+        The response schema is spelled out so the output parses into ``GapProposal``.
+        """
         items = [
             {k: c[k] for k in ("obligation_id", "citation", "obligation_text", "strength", "status",
                                "best_control_id", "best_control_title", "similarity", "shortfalls")}
@@ -69,6 +89,7 @@ class GapSynthesiser(Agent):
         )
 
     def _template_gaps(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        """Rule-based drafts for every non-covered obligation (LLM failure fallback)."""
         controls = {c["id"]: c for c in payload["controls"]}
         obligations = {o["id"]: o for o in payload["obligations"]}
         return [
@@ -78,6 +99,18 @@ class GapSynthesiser(Agent):
         ]
 
     def draft(self, state, buf: MessageBuffer) -> dict[str, Any]:
+        """Round 0: create the first set of gap proposals.
+
+        Model output is untrusted, so each gap is checked before it enters shared
+        state: it must reference a known obligation and satisfy ``GapProposal``.
+        Anything else is dropped and counted, not allowed to crash the run.
+
+        IDs use the position in the raw list, so dropped entries leave a numbering
+        gap instead of shifting the IDs of later proposals.
+
+        Returns:
+            State update with the proposals and ``revision_count`` reset to 0.
+        """
         payload = self._draft_payload(state)
         known_obligations = {o["id"] for o in payload["obligations"]}
         result, usage = self.call_llm("synthesise_gaps", SYSTEM_DRAFT, self._draft_prompt(payload), payload)
@@ -125,6 +158,17 @@ class GapSynthesiser(Agent):
 
     # ---------------------------------------------------------------- revising
     def revise(self, state, buf: MessageBuffer) -> dict[str, Any]:
+        """Round N: respond to every rejection in ``pending_feedback``.
+
+        Each rejected gap is sent with its issues, source obligation and coverage
+        item, so the response can address the validator's actual objections.
+        If the LLM call fails, ``revise_from_feedback`` applies the deterministic rules.
+        A rejected gap the model did not mention counts as "maintain", so it is
+        validated again and cannot silently disappear.
+
+        Returns:
+            State update with all gaps, cleared feedback and the new revision count.
+        """
         feedback = state.get("pending_feedback", [])
         round_no = state.get("revision_count", 0) + 1
         gaps = {g["id"]: GapProposal.model_validate(g) for g in state.get("gaps", [])}
@@ -175,6 +219,18 @@ class GapSynthesiser(Agent):
         }
 
     def _apply(self, gap: GapProposal, rev: dict[str, Any], round_no: int, usage: LLMUsage, buf: MessageBuffer) -> None:
+        """Apply one revision decision to a gap and record it in the gap's history.
+
+        Changes are limited to ``REVISABLE_FIELDS`` and validated as a whole before
+        any are set, so one bad value rejects the batch rather than half-applying it.
+
+        Args:
+            gap: Proposal to update in place.
+            rev: Decision with ``action``, ``changes`` and ``response_to_feedback``.
+            round_no: Current revision cycle.
+            usage: Reasoning source recorded on the gap and the history entry.
+            buf: Trace buffer. Withdrawn gaps go to the Output Agent; others are re-validated.
+        """
         action = str(rev.get("action", "maintain")).lower()
         response = str(rev.get("response_to_feedback", ""))[:1000]
         before = gap.model_dump(mode="json")
@@ -217,6 +273,7 @@ class GapSynthesiser(Agent):
         )
 
     def run(self, state, buf: MessageBuffer) -> dict[str, Any]:
+        """Revise when feedback is pending, otherwise draft (the graph's loop re-enters here)."""
         if state.get("pending_feedback"):
             return self.revise(state, buf)
         return self.draft(state, buf)

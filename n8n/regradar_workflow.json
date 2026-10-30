@@ -15,6 +15,10 @@
       "parameters": {
         "method": "POST",
         "url": "={{ $env.REGRADAR_API_URL || 'http://backend:8000' }}/api/demo/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.REGRADAR_API_TOKEN }}" }]
+        },
         "options": { "timeout": 120000 }
       },
       "id": "a1f0c2d4-0002-4c2a-9a01-000000000002",

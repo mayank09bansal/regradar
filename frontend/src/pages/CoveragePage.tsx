@@ -3,6 +3,7 @@ import RunScope from "../components/RunScope";
 import { Card, Stat, StatusPill } from "../components/ui";
 import type { CoverageItem, RunDetail } from "../types";
 
+/** Coverage summary and the filterable obligation-to-control table. */
 function Matrix({ run }: { run: RunDetail }) {
   const [status, setStatus] = useState<string>("");
   const [regulator, setRegulator] = useState<string>("");
@@ -74,6 +75,7 @@ function Matrix({ run }: { run: RunDetail }) {
   );
 }
 
+/** Control Mapper output for the selected run. */
 export default function CoveragePage() {
   return (
     <RunScope title="Coverage Matrix" subtitle="Control Mapper output: how well each extracted obligation is covered by Acme Pay's control library.">

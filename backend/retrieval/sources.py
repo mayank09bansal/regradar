@@ -22,8 +22,11 @@ from backend.retrieval.knowledge import load_demo_dataset
 from backend.retrieval.text import normalise_ws, split_sentences
 from backend.schemas import Clause, InputDocument, RegulatoryDocument
 
+# Identifies the client honestly; some government sites reject requests with no User-Agent.
 USER_AGENT = "RegRadar/1.0 (academic project; +https://github.com/)"
+# Items read from each feed before relevance ranking.
 MAX_FEED_ITEMS = 15
+# Read limit per HTTP response, so one oversized page cannot exhaust memory.
 MAX_PAGE_BYTES = 1_500_000
 
 
@@ -32,6 +35,11 @@ class SourceError(RuntimeError):
 
 
 def demo_documents(regulators: list[str] | None = None) -> list[RegulatoryDocument]:
+    """Load the labelled synthetic documents, optionally filtered by regulator.
+
+    Args:
+        regulators: Upper-case regulator codes; None or empty keeps all documents.
+    """
     data = load_demo_dataset()
     docs = []
     for d in data["documents"]:
@@ -54,6 +62,7 @@ def demo_documents(regulators: list[str] | None = None) -> list[RegulatoryDocume
     return docs
 
 
+# Clause markers at the start of a paragraph: "3.1", "(2)", "4.", "(a)", "b)".
 _NUMBERED = re.compile(r"^\s*(\(?[0-9]+(?:\.[0-9]+)*[.)]?|\([a-z]\)|[a-z]\))\s+", re.IGNORECASE)
 
 
@@ -83,6 +92,11 @@ def split_into_clauses(text: str) -> list[Clause]:
 
 
 def user_documents(inputs: list[InputDocument]) -> list[RegulatoryDocument]:
+    """Convert pasted input into documents.
+
+    Without a ``reference_id``, the id combines position with a short hash of the
+    text. The hash only labels the document; it has no security purpose.
+    """
     docs = []
     for i, d in enumerate(inputs, start=1):
         digest = sha1(d.text.encode("utf-8")).hexdigest()[:6].upper()
@@ -104,6 +118,7 @@ def user_documents(inputs: list[InputDocument]) -> list[RegulatoryDocument]:
 
 # ------------------------------------------------------------------ live feeds
 def _http_get(url: str, timeout: int) -> bytes:
+    """Fetch a URL with TLS verification, converting network failures to ``SourceError``."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"})
     ctx = ssl.create_default_context()
     try:
@@ -114,6 +129,11 @@ def _http_get(url: str, timeout: int) -> bytes:
 
 
 def _strip_html(raw: str) -> str:
+    """Reduce an HTML page to readable paragraphs.
+
+    Lines of 30 characters or fewer are dropped, which removes most navigation
+    links and menu labels from regulator pages.
+    """
     raw = re.sub(r"(?is)<(script|style).*?</\1>", " ", raw)
     raw = re.sub(r"(?i)<br\s*/?>|</p>|</div>|</li>|</tr>", "\n", raw)
     raw = re.sub(r"<[^>]+>", " ", raw)
@@ -123,6 +143,7 @@ def _strip_html(raw: str) -> str:
 
 
 def _parse_date(value: str | None) -> date | None:
+    """Parse a feed date (RFC 2822 first, then common formats); None if unrecognised."""
     if not value:
         return None
     try:
@@ -138,6 +159,15 @@ def _parse_date(value: str | None) -> date | None:
 
 
 def parse_rss(xml_bytes: bytes, regulator: str, feed_url: str) -> list[RegulatoryDocument]:
+    """Turn RSS XML into documents.
+
+    Items without a title are skipped. Ids hash the title and link, so the same
+    circular keeps its id between runs. The feed description is used as the body,
+    falling back to the title.
+
+    Raises:
+        SourceError: If the bytes are not valid XML.
+    """
     try:
         root = ET.fromstring(xml_bytes)
     except ET.ParseError as exc:
@@ -168,6 +198,17 @@ def parse_rss(xml_bytes: bytes, regulator: str, feed_url: str) -> list[Regulator
 
 
 def fetch_feed(regulator: str, feed_url: str, timeout: int, fetch_pages: bool = True) -> list[RegulatoryDocument]:
+    """Download a feed and, where possible, upgrade items to the full page text.
+
+    Only the first five items are fetched, to keep runs bounded. A page that fails
+    to load keeps its feed summary instead of failing the whole source.
+
+    Args:
+        regulator: Code applied to the documents.
+        feed_url: RSS location.
+        timeout: Seconds per HTTP request.
+        fetch_pages: Set False to use feed summaries only.
+    """
     docs = parse_rss(_http_get(feed_url, timeout), regulator, feed_url)
     if fetch_pages:
         for doc in docs[:5]:  # keep live runs bounded

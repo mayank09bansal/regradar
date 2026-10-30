@@ -4,6 +4,7 @@ import { useAsync } from "../hooks";
 import { formatDateTime } from "../lib";
 import { Card, EmptyState, ErrorBox, Loading, PageHeader, StatusPill } from "../components/ui";
 
+/** All persisted runs with their headline numbers. */
 export default function RunsPage() {
   const runs = useAsync(() => api.runs(100), "runs-all");
 

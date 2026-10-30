@@ -6,8 +6,10 @@ import { useAsync } from "../hooks";
 import { AGENT_ORDER, agentLabel, formatDateTime, reasoningLabel } from "../lib";
 import type { AgentMessage, RunDetail } from "../types";
 
+/** Trace filter options; matches MessageType in types.ts. */
 const TYPES = ["task", "result", "proposal", "feedback", "revision", "decision", "escalation", "report", "error", "info"];
 
+/** Loads the trace on demand and filters it client-side, as it can be large. */
 function TraceView({ run }: { run: RunDetail }) {
   const trace = useAsync(() => api.trace(run.id), `trace-${run.id}`);
   const [agent, setAgent] = useState("");
@@ -71,6 +73,7 @@ function TraceView({ run }: { run: RunDetail }) {
   );
 }
 
+/** The persisted message history of a run. */
 export default function TracePage() {
   return (
     <RunScope

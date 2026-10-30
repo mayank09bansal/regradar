@@ -1,12 +1,56 @@
-import { useState } from "react";
-import { api, API_BASE_URL } from "../api";
+import { useState, type FormEvent } from "react";
+import { api, API_BASE_URL, getApiToken, setApiToken } from "../api";
 import { Card, ErrorBox, Loading, PageHeader, Pill } from "../components/ui";
 import { useAsync } from "../hooks";
 
+/** Yes/no pill for configuration flags. */
 function Bool({ value }: { value: boolean }) {
   return <Pill value={value ? "yes" : "no"} tone={value ? "good" : "muted"} />;
 }
 
+/** Enter the API token for write actions. It is saved for this tab and never displayed again. */
+function WriteAccessCard({ required }: { required: boolean | undefined }) {
+  const [token, setToken] = useState("");
+  const [saved, setSaved] = useState(() => Boolean(getApiToken()));
+
+  function save(e: FormEvent) {
+    e.preventDefault();
+    setApiToken(token.trim());
+    setSaved(Boolean(token.trim()));
+    setToken("");
+  }
+
+  function clear() {
+    setApiToken("");
+    setSaved(false);
+  }
+
+  return (
+    <Card title="Write access">
+      <dl className="kv">
+        <dt>Token required</dt><dd>{required === undefined ? "-" : <Bool value={required} />}</dd>
+        <dt>Saved in this tab</dt><dd><Bool value={saved} /></dd>
+      </dl>
+      {required === false && (
+        <p className="small muted">
+          Anyone who can reach this API can start runs and change data. Set <code>REGRADAR_API_TOKEN</code> on any shared deployment.
+        </p>
+      )}
+      <form onSubmit={save} className="row gap-s wrap mt">
+        <label className="field grow"><span>API token</span>
+          <input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
+        </label>
+        <button className="btn btn-secondary" type="submit" disabled={!token.trim()}>Save token</button>
+        <button className="btn btn-secondary" type="button" onClick={clear} disabled={!saved}>Clear</button>
+      </form>
+      <p className="small muted" role="status">
+        {saved ? "Token saved for this browser tab." : "No token saved. It is kept for this tab only."}
+      </p>
+    </Card>
+  );
+}
+
+/** Read-only backend configuration and health, plus token entry. */
 export default function SettingsPage() {
   const health = useAsync(() => api.health(), "health");
   const config = useAsync(() => api.config(), "config-settings");
@@ -69,6 +113,7 @@ export default function SettingsPage() {
           <button className="btn btn-secondary" onClick={testIntegrations}>Send test notification</button>
           {testResult && <p className="small">{testResult}</p>}
         </Card>
+        <WriteAccessCard required={config.data?.write_auth_required} />
       </div>
     </>
   );

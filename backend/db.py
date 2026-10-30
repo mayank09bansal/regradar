@@ -19,6 +19,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+# Portable SQL shared by SQLite and PostgreSQL. JSON is stored as text in *_json columns,
+# so both backends behave the same and no JSON column type is required.
 SCHEMA_STATEMENTS = (
     """CREATE TABLE IF NOT EXISTS runs (
         id TEXT PRIMARY KEY,
@@ -52,27 +54,33 @@ class _BaseDatabase:
     kind = "base"
 
     def _sql(self, query: str) -> str:
+        """Translate a query for this backend; SQLite uses ``?`` as written."""
         return query
 
     @contextmanager
     def connect(self) -> Iterator[Any]:  # pragma: no cover - abstract
+        """Yield a connection that commits on success and rolls back on error."""
         raise NotImplementedError
         yield
 
     def _init_schema(self) -> None:
+        """Create missing tables and indexes. Safe on every start (IF NOT EXISTS)."""
         with self.connect() as conn:
             for stmt in SCHEMA_STATEMENTS:
                 conn.execute(stmt)
 
     def _exec(self, conn: Any, query: str, params: tuple = ()) -> Any:
+        """Run one query after translating its placeholders."""
         return conn.execute(self._sql(query), params)
 
     def ping(self) -> bool:
+        """Return True if the database answers a trivial query (used by /api/health)."""
         with self.connect() as conn:
             return self._exec(conn, "SELECT 1 AS ok").fetchone()["ok"] == 1
 
     # ---------------------------------------------------------------- runs
     def create_run(self, run_id: str, created_at: str, mode: str, provider: str, model: str, request: dict) -> None:
+        """Insert a run in the 'running' state before the graph starts."""
         with self.connect() as conn:
             self._exec(
                 conn,
@@ -85,6 +93,10 @@ class _BaseDatabase:
         self, run_id: str, completed_at: str, status: str, stats: dict, result: dict | None,
         trace: list[dict], error: str | None = None,
     ) -> None:
+        """Store a run's outcome and replace its trace in one transaction.
+
+        A reader therefore never sees a finished run with a partial trace.
+        """
         with self.connect() as conn:
             self._exec(
                 conn,
@@ -104,10 +116,12 @@ class _BaseDatabase:
                 )
 
     def _executemany(self, conn: Any, query: str, rows: list[tuple]) -> None:
+        """Insert many rows; PostgreSQL overrides this to use a cursor."""
         conn.executemany(self._sql(query), rows)
 
     @staticmethod
     def _summary(row: Any) -> dict[str, Any]:
+        """Map a row to the light summary used by run lists, decoding the stats JSON."""
         return {
             "id": row["id"], "created_at": row["created_at"], "completed_at": row["completed_at"],
             "status": row["status"], "mode": row["mode"], "llm_provider": row["llm_provider"],
@@ -115,11 +129,18 @@ class _BaseDatabase:
         }
 
     def list_runs(self, limit: int = 50) -> list[dict[str, Any]]:
+        # Named columns: result_json holds the whole run and summaries never read it.
         with self.connect() as conn:
-            rows = self._exec(conn, "SELECT * FROM runs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+            rows = self._exec(
+                conn,
+                "SELECT id, created_at, completed_at, status, mode, llm_provider, llm_model, stats_json, error "
+                "FROM runs ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
         return [self._summary(r) for r in rows]
 
     def get_run(self, run_id: str) -> dict[str, Any] | None:
+        """Return a run with its request, result and trace length, or None if unknown."""
         with self.connect() as conn:
             row = self._exec(conn, "SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
             count_row = self._exec(conn, "SELECT COUNT(*) AS n FROM messages WHERE run_id=?", (run_id,)).fetchone()
@@ -132,6 +153,7 @@ class _BaseDatabase:
         return data
 
     def get_trace(self, run_id: str) -> list[dict[str, Any]]:
+        """Return a run's trace messages in sequence order."""
         with self.connect() as conn:
             rows = self._exec(
                 conn, "SELECT message_json FROM messages WHERE run_id=? ORDER BY seq", (run_id,)
@@ -139,6 +161,7 @@ class _BaseDatabase:
         return [json.loads(r["message_json"]) for r in rows]
 
     def delete_run(self, run_id: str) -> bool:
+        """Delete a run and its messages; returns False when no such run exists."""
         with self.connect() as conn:
             self._exec(conn, "DELETE FROM messages WHERE run_id=?", (run_id,))
             return self._exec(conn, "DELETE FROM runs WHERE id=?", (run_id,)).rowcount > 0
@@ -150,6 +173,14 @@ class Database(_BaseDatabase):
     kind = "sqlite"
 
     def __init__(self, path: Path | None):
+        """Open or create the database at ``path``.
+
+        In-memory mode keeps one connection open, because the data would vanish
+        with it. File mode opens a connection per operation.
+
+        Raises:
+            RuntimeError: If the parent directory cannot be created.
+        """
         self.path = path
         self._lock = threading.Lock()
         self._memory: sqlite3.Connection | None = None
@@ -164,6 +195,10 @@ class Database(_BaseDatabase):
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
+        """Yield a connection under a lock, with foreign keys enabled.
+
+        The lock serialises access: FastAPI runs sync routes on several threads.
+        """
         with self._lock:
             if self._memory is not None:
                 conn = self._memory
@@ -193,6 +228,11 @@ class PostgresDatabase(_BaseDatabase):
     kind = "postgres"
 
     def __init__(self, url: str, connect_timeout: int = 10):
+        """Check the driver is installed, then create the schema.
+
+        Raises:
+            RuntimeError: If psycopg is missing, with the command that fixes it.
+        """
         import importlib.util
 
         if importlib.util.find_spec("psycopg") is None:  # pragma: no cover - imported lazily for SQLite users
@@ -205,10 +245,16 @@ class PostgresDatabase(_BaseDatabase):
         self._init_schema()
 
     def _sql(self, query: str) -> str:
+        """Swap SQLite-style ``?`` placeholders for psycopg's ``%s``."""
         return query.replace("?", "%s")
 
     @contextmanager
     def connect(self) -> Iterator[Any]:
+        """Yield a new connection whose rows are returned as dicts.
+
+        Raises:
+            RuntimeError: If the connection cannot be established.
+        """
         import psycopg
         from psycopg.rows import dict_row
 
@@ -226,6 +272,7 @@ class PostgresDatabase(_BaseDatabase):
             conn.close()
 
     def _executemany(self, conn: Any, query: str, rows: list[tuple]) -> None:
+        """Insert many rows through a cursor, where psycopg provides ``executemany``."""
         with conn.cursor() as cur:
             cur.executemany(self._sql(query), rows)
 

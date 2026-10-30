@@ -21,6 +21,7 @@ from backend.schemas import AnalysisRequest, utcnow
 
 log = logging.getLogger("regradar.runner")
 
+# State keys persisted as the run result. Trace messages are stored in their own table.
 RESULT_KEYS = (
     "documents", "obligations", "coverage", "gaps", "validation_decisions", "remediation_plan",
     "report", "route_history", "source_errors", "errors", "validation_round", "revision_count", "max_revisions",
@@ -28,6 +29,7 @@ RESULT_KEYS = (
 
 
 def new_run_id() -> str:
+    """Create a sortable, readable id: UTC timestamp plus a random suffix for uniqueness."""
     return f"run-{utcnow():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}"
 
 
