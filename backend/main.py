@@ -59,8 +59,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(Exception)
     async def unhandled(_: Request, exc: Exception) -> JSONResponse:  # pragma: no cover - defensive
-        log.exception("Unhandled error")
-        return JSONResponse(status_code=500, content={"detail": f"Internal error: {type(exc).__name__}: {exc}"})
+        log.exception("Unhandled error", exc_info=exc)
+        # Exception text can hold connection strings or file paths: it stays in the server log.
+        return JSONResponse(status_code=500, content={"detail": "Internal server error. See the server log for details."})
 
     frontend = settings.frontend_path
     if settings.serve_frontend and (frontend / "index.html").is_file():

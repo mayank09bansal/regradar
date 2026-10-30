@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -19,6 +20,8 @@ from backend.orchestration.graph import GRAPH_SPEC
 from backend.orchestration.runner import run_analysis
 from backend.retrieval.knowledge import load_control_library, load_demo_dataset
 from backend.schemas import AnalysisRequest, RunDetail, RunSummary
+
+log = logging.getLogger("regradar.api")
 
 router = APIRouter(prefix="/api")
 
@@ -59,8 +62,9 @@ def _require_run(db: RunStore, run_id: str) -> dict[str, Any]:
 def health(db: RunStore = Depends(get_db), settings: Settings = Depends(get_settings_dep)) -> dict[str, Any]:
     try:
         db_ok = db.ping()
-    except Exception as exc:  # pragma: no cover
-        raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
+    except Exception as exc:
+        log.exception("Database healthcheck failed")
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
     return {
         "status": "ok",
         "version": __version__,

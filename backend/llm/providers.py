@@ -14,6 +14,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from backend.config import LOCAL_LLM_URL_PREFIXES
 from backend.llm.base import LLMAuthError, LLMError, LLMResponseError, LLMResult, parse_json_object
 
 JSON_INSTRUCTION = (
@@ -130,6 +131,9 @@ class OpenAICompatibleClient(_HTTPClient):
     provider = "openai"
 
     def __init__(self, api_key: str, base_url: str, **kw: Any):
+        # Local servers (e.g. Ollama) need no key; a hosted one would reject every call.
+        if not api_key and not base_url.startswith(LOCAL_LLM_URL_PREFIXES):
+            raise LLMAuthError(f"OPENAI_API_KEY is not set for {base_url}")
         super().__init__(**kw)
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")

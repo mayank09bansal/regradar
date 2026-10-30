@@ -115,8 +115,14 @@ class _BaseDatabase:
         }
 
     def list_runs(self, limit: int = 50) -> list[dict[str, Any]]:
+        # Named columns: result_json holds the whole run and summaries never read it.
         with self.connect() as conn:
-            rows = self._exec(conn, "SELECT * FROM runs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+            rows = self._exec(
+                conn,
+                "SELECT id, created_at, completed_at, status, mode, llm_provider, llm_model, stats_json, error "
+                "FROM runs ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
         return [self._summary(r) for r in rows]
 
     def get_run(self, run_id: str) -> dict[str, Any] | None:
