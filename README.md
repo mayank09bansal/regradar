@@ -1,7 +1,6 @@
 # RegRadar - Multi-Agent Regulatory Change Radar
 
-RegRadar turns new regulatory circulars into **validated, prioritised compliance gaps**. Six LangGraph agents retrieve regulations, extract obligations, map them to internal controls, propose gaps, independently validate them in an **adaptive feedback loop**, and write a remediation report. A FastAPI backend serves a React + TypeScript dashboard.
-
+RegRadar turns new regulatory circulars into **validated, prioritised compliance gaps**. Six LangGraph agents retrieve regulations, extract obligations, map them to internal controls, propose gaps, independently validate them in an **adaptive feedback loop**, and write a remediation report. A FastAPI backend serves a React + TypeScript.
 > The demo uses a **synthetic** dataset (RBI/MeitY-style circulars) and a fictional company, *Acme Pay*. In demo mode the LLM is replaced by a **deterministic demo responder**; the LangGraph graph, routing, validator checks and trace are real. Every demo output is labelled as such.
 
 ---
