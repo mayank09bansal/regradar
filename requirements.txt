@@ -1,8 +1,0 @@
-# RegRadar runtime dependencies (used locally AND by Vercel). Install into the project's .venv only.
-# Keep in sync with [project].dependencies in pyproject.toml.
-# Verified with: fastapi 0.143.0, langgraph 1.2.15, langchain-core 1.6.10, pydantic 2.13, psycopg 3.3.6.
-fastapi>=0.141.1,<1.0      # 0.141.1+ provides app.frontend() for serving the built dashboard
-uvicorn[standard]>=0.30,<1.0
-pydantic>=2.9,<3.0
-langgraph>=1.0,<2.0
-psycopg[binary]>=3.2,<4.0  # PostgreSQL storage (Neon on Vercel); only imported when DATABASE_URL is postgres
