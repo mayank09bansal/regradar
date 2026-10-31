@@ -1,0 +1,139 @@
+{
+  "library": "Acme Pay internal control library (fictional, for the RegRadar demo)",
+  "synthetic": true,
+  "organisation": "Acme Pay Pvt Ltd (fictional)",
+  "controls": [
+    {
+      "id": "CTRL-IR-01", "domain": "Incident Response", "owner": "CISO",
+      "title": "Security incident triage and escalation",
+      "description": "Cyber security incidents detected by the SOC are triaged and escalated internally to the CISO within 24 hours of detection; reporting to regulators is handled case by case by Compliance.",
+      "keywords": ["cyber security incident", "incident", "detection", "report", "escalation"],
+      "parameters": {"deadline_hours": 24}, "criticality": "high"
+    },
+    {
+      "id": "CTRL-IAM-02", "domain": "Identity & Access", "owner": "Head of IT Operations",
+      "title": "Multi-factor authentication for privileged access",
+      "description": "Multi-factor authentication is enforced for all privileged and administrative accounts accessing production systems through the PAM gateway.",
+      "keywords": ["multi-factor authentication", "privileged", "administrative", "production systems"],
+      "parameters": {}, "criticality": "high"
+    },
+    {
+      "id": "CTRL-VM-01", "domain": "Vulnerability Management", "owner": "Head of Security Engineering",
+      "title": "VAPT of internet-facing applications",
+      "description": "Vulnerability assessment and penetration testing of internet-facing applications is performed annually by an empanelled external auditor.",
+      "keywords": ["vulnerability assessment", "penetration testing", "internet-facing applications"],
+      "parameters": {"frequency": "annually", "frequency_per_year": 1}, "criticality": "high"
+    },
+    {
+      "id": "CTRL-LOG-01", "domain": "Logging & Monitoring", "owner": "SOC Manager",
+      "title": "Centralised security log retention",
+      "description": "System and security logs are centrally retained in the SIEM for 90 days and stored in the Mumbai cloud region within India.",
+      "keywords": ["logs", "retained", "security logs", "stored within india"],
+      "parameters": {"retention_days": 90}, "criticality": "medium"
+    },
+    {
+      "id": "CTRL-BCP-01", "domain": "Resilience", "owner": "Chief Risk Officer",
+      "title": "Business continuity and disaster recovery plan",
+      "description": "The business continuity and disaster recovery plan is approved by the board and tested through an annual failover exercise.",
+      "keywords": ["business continuity", "disaster recovery", "board approved plan"],
+      "parameters": {"frequency": "annually", "frequency_per_year": 1}, "criticality": "high"
+    },
+    {
+      "id": "CTRL-TPRM-01", "domain": "Third-Party Risk", "owner": "Vendor Risk Manager",
+      "title": "Pre-onboarding vendor security due diligence",
+      "description": "Every technology vendor completes a security risk assessment and due diligence review before onboarding is approved.",
+      "keywords": ["security risk assessment", "technology vendor", "before onboarding", "due diligence"],
+      "parameters": {}, "criticality": "high"
+    },
+    {
+      "id": "CTRL-TPRM-02", "domain": "Third-Party Risk", "owner": "Legal Counsel",
+      "title": "Right-to-audit clause in outsourcing agreements",
+      "description": "All outsourcing agreements include a standard clause granting the company and the Reserve Bank the right to audit the service provider.",
+      "keywords": ["outsourcing agreement", "right to audit", "service provider", "clause"],
+      "parameters": {}, "criticality": "medium"
+    },
+    {
+      "id": "CTRL-TPRM-03", "domain": "Third-Party Risk", "owner": "Vendor Risk Manager",
+      "title": "Annual critical vendor performance review",
+      "description": "Critical IT service providers are reviewed annually for service performance, SLA breaches and financial stability.",
+      "keywords": ["critical vendor", "service provider", "annual review", "performance"],
+      "parameters": {"frequency": "annually", "frequency_per_year": 1}, "criticality": "medium"
+    },
+    {
+      "id": "CTRL-PRIV-01", "domain": "Privacy", "owner": "Data Protection Officer",
+      "title": "Consent capture and consent ledger",
+      "description": "Consent from each data principal is captured in the mobile app with the purpose and timestamp of consent, and verifiable consent records are maintained in the consent ledger.",
+      "keywords": ["consent", "records of consent", "purpose", "timestamp", "data principal"],
+      "parameters": {}, "criticality": "high"
+    },
+    {
+      "id": "CTRL-PRIV-02", "domain": "Privacy", "owner": "Data Protection Officer",
+      "title": "Customer data retention schedule",
+      "description": "A data retention schedule defines retention periods for customer personal data; erasure is performed manually when a customer requests deletion.",
+      "keywords": ["retention", "personal data", "erasure", "deletion"],
+      "parameters": {}, "criticality": "medium"
+    },
+    {
+      "id": "CTRL-PRIV-03", "domain": "Privacy", "owner": "Data Protection Officer",
+      "title": "Privacy notice and grievance contact",
+      "description": "The privacy notice on the website lists the grievance officer email address for privacy complaints.",
+      "keywords": ["privacy notice", "website", "contact", "grievance officer"],
+      "parameters": {}, "criticality": "low"
+    },
+    {
+      "id": "CTRL-GOV-01", "domain": "Governance", "owner": "Company Secretary",
+      "title": "Board risk committee oversight of technology risk",
+      "description": "The Risk Management Committee of the board reviews technology and outsourcing risk reports every quarter.",
+      "keywords": ["board", "committee", "technology risk", "outsourcing"],
+      "parameters": {"frequency": "quarterly", "frequency_per_year": 4}, "criticality": "medium"
+    },
+    {
+      "id": "CTRL-AWR-01", "domain": "People", "owner": "HR Business Partner",
+      "title": "Security awareness training",
+      "description": "Annual cyber security awareness training is mandatory for all employees and contractors.",
+      "keywords": ["awareness training", "employees"],
+      "parameters": {"frequency": "annually", "frequency_per_year": 1}, "criticality": "low"
+    },
+    {
+      "id": "CTRL-ENC-01", "domain": "Data Security", "owner": "Head of Security Engineering",
+      "title": "Encryption of data at rest and in transit",
+      "description": "Cardholder and customer data is encrypted at rest with AES-256 and in transit with TLS 1.2 or higher.",
+      "keywords": ["encryption", "tls", "data at rest"],
+      "parameters": {}, "criticality": "high"
+    },
+    {
+      "id": "CTRL-CHG-01", "domain": "Change Management", "owner": "Head of IT Operations",
+      "title": "Production change approval",
+      "description": "Changes to production systems require peer review and approval by the change advisory board before deployment.",
+      "keywords": ["change management", "change advisory board", "deployment"],
+      "parameters": {}, "criticality": "medium"
+    },
+    {
+      "id": "CTRL-BKP-01", "domain": "Resilience", "owner": "Head of IT Operations",
+      "title": "Backup and restoration testing",
+      "description": "Daily encrypted backups of payment databases are taken and restoration is tested every half-yearly.",
+      "keywords": ["backup", "restoration"],
+      "parameters": {"frequency": "half-yearly", "frequency_per_year": 2}, "criticality": "medium"
+    }
+  ],
+  "known_issues": [
+    {
+      "id": "KI-2026-011",
+      "title": "Increase VAPT frequency for internet-facing applications from annual to quarterly",
+      "related_control_ids": ["CTRL-VM-01"],
+      "related_citations": ["RBI-DEMO-2026-014 §3.3"],
+      "status": "remediation in progress",
+      "owner": "Head of Security Engineering",
+      "target_date": "2026-12-31"
+    },
+    {
+      "id": "KI-2026-004",
+      "title": "Automate backup restoration evidence collection",
+      "related_control_ids": ["CTRL-BKP-01"],
+      "related_citations": [],
+      "status": "open",
+      "owner": "Head of IT Operations",
+      "target_date": "2027-03-31"
+    }
+  ]
+}
