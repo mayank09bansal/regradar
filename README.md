@@ -1,14 +1,15 @@
 # RegRadar - Multi-Agent Regulatory Change Radar
 
 RegRadar turns new regulatory circulars into **validated, prioritised compliance gaps**. Six LangGraph agents retrieve regulations, extract obligations, map them to internal controls, propose gaps, independently validate them in an **adaptive feedback loop**, and write a remediation report. A FastAPI backend serves a React + TypeScript.
-> The demo uses a **synthetic** dataset (RBI/MeitY-style circulars) and a fictional company, *Acme Pay*. In demo mode the LLM is replaced by a **deterministic demo responder**; the LangGraph graph, routing, validator checks and trace are real. Every demo output is labelled as such.
+> The demo uses a **synthetic** dataset (RBI/MeitY-style circulars) and a fictional company, *Acme Pay*. In demo mode the LLM is replaced by a **deterministic demo responder**; the LangGraph graph, routing, validator checks and trace are real. Every demo output is labelled as such a way.
 
 ---
 
 ## Highlights
 
-* **Six LangGraph Agents:** Regulatory Scout &rarr; Obligation Extractor &rarr; Control Mapper &rarr; Gap Synthesiser &harr; Novelty Validator &rarr; Output Agent.
-* **Adaptive Feedback Loop:** The Novelty Validator rejects gaps with structured feedback (issue code, target field, expected value). The Gap Synthesiser receives this through shared LangGraph state and revises, withdraws, or defends each gap. The graph re-validates, finalising accepted gaps or escalating to a human compliance officer upon reaching the revision limit.
+
+* **Six LangGraph Agents we used in this:** Regulatory Scout &rarr; Obligation Extractor &rarr; Control Mapper &rarr; Gap Synthesiser &harr; Novelty Validator &rarr; Output Agent.
+* **Adaptive Feedback Loop:** The Novelty Validator rejects gaps with structured feedback (issue code, target field, expected value). The Gap Synthesiser receives this through shared LangGraph state and revises, withdraws, or defends each gap. The graph re-validates, finalising accepted gaps or escalating to a human compliance officer upon reaching the revised limit.
 * **Nine Independent Validation Checks:** Evidence grounding, citation consistency, already covered, already tracked (novelty / known-issues register), duplicate detection, modality classification, severity calibration, required detail, and obligation existence.
 * **Persistent Execution Traces:** Full chronological record of every message passed between agents, inspectable in the web dashboard.
 * **Live Mode:** Anthropic or any OpenAI-compatible provider (OpenAI, Groq, Google Gemini, Ollama), pasted circulars, and live RBI/SEBI RSS feeds.
